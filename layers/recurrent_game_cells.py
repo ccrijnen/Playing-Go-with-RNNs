@@ -1,10 +1,11 @@
 import tensorflow as tf
+from tensorflow.python.ops.rnn_cell_impl import LayerRNNCell
 
 _BIAS_VARIABLE_NAME = "bias"
 _WEIGHTS_VARIABLE_NAME = "kernel"
 
 
-class LSTSCell(tf.nn.rnn_cell.RNNCell):
+class LSTSCell(LayerRNNCell):
     """Long-Short-Term-Strategy Cell"""
 
     def __init__(self,
@@ -45,7 +46,7 @@ class LSTSCell(tf.nn.rnn_cell.RNNCell):
 
         self.built = True
 
-    def __call__(self, inputs, state, scope=None):
+    def call(self, inputs, state):
         sigmoid = tf.sigmoid
         one = tf.constant(1, dtype=tf.dtypes.int32)
 
@@ -74,9 +75,9 @@ class LSTSCell(tf.nn.rnn_cell.RNNCell):
         new_s = add(multiply(s, fc),
                     multiply(gc, ic))
 
-        new_h = add(multiply(features, fh),
-                    multiply(self._activation(new_s), oh))
-        new_h = self._activation(new_h)
+        new_h = self._activation(
+            add(multiply(features, fh),
+                multiply(self._activation(new_s), oh)))
 
         new_state = tf.nn.rnn_cell.LSTMStateTuple(new_s, new_h)
 
