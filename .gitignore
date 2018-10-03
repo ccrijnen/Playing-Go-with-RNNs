@@ -128,3 +128,6 @@ venv.bak/
 
 # Data
 data/
+
+# Version Control
+.idea/**/vcs.xml
