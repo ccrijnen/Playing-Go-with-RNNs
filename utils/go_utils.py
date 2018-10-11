@@ -36,11 +36,11 @@ def print_go_position(board):
     print(go_game)
 
 
-def parse_sgf(path, board_size, sort_by_color=False):
+def parse_sgf(filename, board_size, sort_by_color=False):
     """Parses a sgf file to a game dict.
 
     Args:
-        path: str, path of the sgf file
+        filename: str, path of the sgf file
         board_size: int, board size
         sort_by_color: bool, if True sort sequences by first black then white
     Returns:
@@ -60,18 +60,7 @@ def parse_sgf(path, board_size, sort_by_color=False):
     """
     go.set_board_size(board_size)
 
-    with open(path, "rb") as f:
-        sgf_src = f.read()
-
-    try:
-        sgf_game = sgf.Sgf_game.from_bytes(sgf_src)
-    except ValueError:
-        raise Exception("bad sgf file")
-
-    try:
-        sgf_board, plays = sgf_moves.get_setup_and_moves(sgf_game)
-    except ValueError as e:
-        raise Exception(str(e))
+    sgf_board, plays, sgf_game = read_sgf(filename)
 
     size = sgf_board.side
 
@@ -86,7 +75,7 @@ def parse_sgf(path, board_size, sort_by_color=False):
     try:
         first_player = _get_first_player(plays)
     except IndexError:
-        tf.logging.error("Skipped reading Go game from sgf '{}' because no moves were found!".format(path))
+        tf.logging.error("Skipped reading Go game from sgf '{}' because no moves were found!".format(filename))
         return None
 
     num_moves = go.BOARD_SIZE * go.BOARD_SIZE + 1
@@ -123,7 +112,7 @@ def parse_sgf(path, board_size, sort_by_color=False):
         try:
             go_game.play_move(move, colour, True)
         except go.IllegalMove:
-            tf.logging.error("Skipped reading Go game from sgf '{}' because IllegalMove error occurred!".format(path))
+            tf.logging.error("Skipped reading Go game from sgf '{}' because IllegalMove error occurred!".format(filename))
             return None
 
     if sort_by_color:
@@ -144,6 +133,23 @@ def parse_sgf(path, board_size, sort_by_color=False):
     }
 
     return data
+
+
+def read_sgf(filename):
+    with open(filename, "rb") as f:
+        sgf_src = f.read()
+
+    try:
+        sgf_game = sgf.Sgf_game.from_bytes(sgf_src)
+    except ValueError:
+        raise Exception("bad sgf file")
+
+    try:
+        sgf_board, plays = sgf_moves.get_setup_and_moves(sgf_game)
+    except ValueError as e:
+        raise Exception(str(e))
+
+    return sgf_board, plays, sgf_game
 
 
 def _prep_board(board):

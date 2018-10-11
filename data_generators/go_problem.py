@@ -10,7 +10,8 @@ from tensor2tensor.data_generators import generator_utils
 from tensor2tensor.data_generators import problem
 from tensor2tensor.utils import data_reader
 
-from data_generators import go_utils
+from utils import go_utils, data_utils
+from models.base_go_hparams import base_go_hparams
 
 _GOGOD_ZIP_NAME = 'GoGoDSpring2018.zip'
 _GOGOD_FILENAMES_GLOB = '/*.sgf'
@@ -121,11 +122,11 @@ def get_kgs_filenames(tmp_dir):
     return filenames
 
 
-def split_dataset(paths, split_fractions):
+def split_dataset(filenames, split_fractions):
     """Split dataset into train, dev and test.
 
     Args:
-        paths: str, paths to split
+        filenames: str, paths to split
         split_fractions: dict<DatasetSplit, fraction>
     Return:
         paths split into train, dev and test according to split fractions
@@ -133,15 +134,17 @@ def split_dataset(paths, split_fractions):
     assert sum(split_fractions.values()) == 1, \
         "Sum of the split fractions is not 1 but {}!".format(sum(split_fractions.values()) == 1)
 
+    random.shuffle(filenames)
+
     training_fraction = split_fractions[problem.DatasetSplit.TRAIN]
     test_fraction = split_fractions[problem.DatasetSplit.TEST]
 
-    split_index1 = int(math.floor(len(paths) * training_fraction))
-    split_index2 = int(math.floor(len(paths) * (1 - test_fraction)))
+    split_index1 = int(math.floor(len(filenames) * training_fraction))
+    split_index2 = int(math.floor(len(filenames) * (1 - test_fraction)))
 
-    train_split = paths[:split_index1]
-    dev_split = paths[split_index1:split_index2]
-    test_split = paths[split_index2:]
+    train_split = filenames[:split_index1]
+    dev_split = filenames[split_index1:split_index2]
+    test_split = filenames[split_index2:]
 
     return train_split, dev_split, test_split
 
@@ -180,10 +183,9 @@ def _random_augmentation(example, board_size):
     legal_moves = tf.convert_to_tensor(legal_moves, name='legal_moves')
     p_targets = tf.convert_to_tensor(p_targets, name='p_targets')
 
-    rand_k = tf.random_uniform([], int(0), int(8), tf.int32, name="rand_k")
+    rand_k = tf.random_uniform([], int(0), int(8), tf.int64, name="rand_k")
 
     for name, array in [["inputs", inputs], ["legal_moves", legal_moves], ["p_targets", p_targets]]:
-        _array = array
         split = name != "inputs"
         split_p = name == "p_targets"
 
@@ -208,7 +210,7 @@ def _random_augmentation(example, board_size):
         def _no_aug():
             nonlocal scope
             scope = "no_augmentation"
-            return _array
+            return array
 
         def _rot90():
             nonlocal scope
@@ -256,7 +258,7 @@ def _random_augmentation(example, board_size):
             (tf.equal(rand_k, 7), _flip_diagonal_upper_right)
         ]
 
-        result = tf.case(cases, default=lambda: _array, exclusive=True, name=scope)
+        result = tf.case(cases, name=scope)
 
         if split:
             # reassemble the original shape from combined result tensor and rest tensor
@@ -266,6 +268,41 @@ def _random_augmentation(example, board_size):
                 result = tf.argmax(result, 1)
 
         example[name] = result
+
+    return example
+
+
+def split_exmaple(example):
+    inputs = example["inputs"]
+    legal_moves = example["legal_moves"]
+    p_targets = example["p_targets"]
+    v_targets = example["v_targets"]
+
+    mask_black = tf.equal(inputs[:, 2, 0, 0], 1)
+
+    game_length = tf.boolean_mask(inputs, mask_black)
+    game_length = tf.shape(game_length)[0]
+
+    example1 = {
+        "inputs": tf.boolean_mask(inputs, mask_black),
+        "legal_moves": tf.boolean_mask(legal_moves, mask_black),
+        "p_targets": tf.boolean_mask(p_targets, mask_black),
+        "v_targets": tf.boolean_mask(v_targets, mask_black),
+        "game_lengt": game_length
+    }
+
+    mask_white = tf.equal(inputs[:, 2, 0, 0], 0)
+
+    game_length = tf.boolean_mask(inputs, mask_white)
+    game_length = tf.shape(game_length)[0]
+
+    example2 = {
+        "inputs": tf.boolean_mask(inputs, mask_white),
+        "legal_moves": tf.boolean_mask(legal_moves, mask_white),
+        "p_targets": tf.boolean_mask(p_targets, mask_white),
+        "v_targets": tf.boolean_mask(v_targets, mask_white),
+        "game_lengt": game_length
+    }
 
     return example
 
@@ -281,6 +318,10 @@ class GoProblem(problem.Problem):
     def num_moves(self):
         """Equivalent to num_classes."""
         return self.board_size * self.board_size + 1
+
+    @property
+    def multiple_datasets(self):
+        return False
 
     @property
     def sort_sequence_by_color(self):
@@ -300,6 +341,9 @@ class GoProblem(problem.Problem):
             problem.DatasetSplit.EVAL: 0.1,
             problem.DatasetSplit.TEST: 0.1
         }
+
+    def add_sizes(self, hparams):
+        raise NotImplementedError
 
     def generator(self, paths):
         """Go game generator from sgf format.
@@ -337,20 +381,48 @@ class GoProblem(problem.Problem):
         return data_fields, data_items_to_decoders
 
     def preprocess_example(self, example, mode, hparams):
-        if mode == tf.estimator.ModeKeys.TRAIN:
-            example = _random_augmentation(example, self.board_size)
-
         example["inputs"].set_shape([None, 3, self.board_size, self.board_size])
         example["legal_moves"].set_shape([None, self.num_moves])
         example["p_targets"].set_shape([None])
         example["v_targets"].set_shape([None])
 
+        if mode == tf.estimator.ModeKeys.TRAIN:
+            example = _random_augmentation(example, self.board_size)
+
+        example["inputs"] = tf.cast(example["inputs"], tf.float32)
+        example["legal_moves"] = tf.cast(example["legal_moves"], tf.float32)
+        example["v_targets"] = tf.cast(example["v_targets"], tf.float32)
+
         return example
+
+    def get_hparams(self, model_hparams=None):
+        """Returns problem_hparams."""
+        if model_hparams is None:
+            model_hparams = base_go_hparams()
+        if self._hparams is not None:
+            return self._hparams
+
+        ret = self.hparams(model_hparams, model_hparams)
+        if ret is not None:
+            raise ValueError("The Problem subclass hparams function should mutate "
+                             "the defaults passed in and return None.")
+
+        self._hparams = model_hparams
+        return self._hparams
+
+    def hparams(self, defaults, model_hparams):
+        hp = model_hparams
+
+        hp.add_hparam("board_size", self.board_size)
+        hp.add_hparam("num_moves", self.num_moves)
+
+        hp.max_length = self.board_size * self.board_size * 2
+
+        self.add_sizes(model_hparams)
 
 
 class GoProblem19x19(GoProblem):
     """Go Problem for 19x19 go games."""
-
     @property
     def board_size(self):
         return 19
@@ -379,8 +451,30 @@ class GoProblem19x19(GoProblem):
     def sort_sequence_by_color(self):
         return True
 
+    @property
+    def multiple_datasets(self):
+        return True
+
     def dataset_filename(self):
         return "go_problem_19"
+
+    @property
+    def batch_size_means_tokens(self):
+        """Do we specify hparams.batch_size in tokens per datashard per batch.
+        This is generally done for text problems.
+        If False, we assume that batch sizes are specified in examples per
+        datashard per batch.
+        Returns:
+          a boolean
+        """
+        return True
+
+    def add_sizes(self, hparams):
+        stats = data_utils.DatasetStats(self, hparams)
+        sizes = stats.get_sizes('rnn')
+
+        for k, v in sizes.items():
+            hparams.add_hparam(k, v)
 
     def generate_data(self, data_dir, tmp_dir, task_id=-1):
         """Generates sharded Train, Dev and Test splits of the KGS and GoGoD Datasets.
@@ -395,17 +489,18 @@ class GoProblem19x19(GoProblem):
             tmp_dir: str, directory containing KGS and GoGoD zips
             task_id: int, task id.
         """
+        # set random seed to make sure shuffle is recreatable
+        random.seed(230)
+
         # unzip gogod and kgs zips if not already done
         maybe_unzip_gogod(tmp_dir)
         maybe_unzip_kgs(tmp_dir)
 
         # search all sgf files in the gogod dataset and shuffle the filnames
         filenames_gogod = get_gogod_filenames(tmp_dir, self.board_size)
-        random.shuffle(filenames_gogod)
 
         # search all sgf files in the kgs dataset and shuffle the filnames
         filenames_kgs = get_kgs_filenames(tmp_dir)
-        random.shuffle(filenames_kgs)
 
         # split gogod filenames into train, dev and test
         train_gogod, dev_gogod, test_gogod = split_dataset(filenames_gogod, self.split_fractions)
@@ -499,7 +594,7 @@ class GoProblem19x19(GoProblem):
             filepattern str
         """
         path = os.path.join(data_dir, self.dataset_filename())
-        shard_str = "-{:05d}".format(shard if shard is not None else "")
+        shard_str = "-%05d" % shard if shard is not None else ""
         if mode == problem.DatasetSplit.TRAIN:
             suffix = "train"
         elif mode in [problem.DatasetSplit.EVAL, tf.estimator.ModeKeys.PREDICT]:
@@ -508,7 +603,7 @@ class GoProblem19x19(GoProblem):
             assert mode == problem.DatasetSplit.TEST
             suffix = "test"
 
-        return "{}{}-{}{}".format(path, dataset_suffix, suffix, shard_str)
+        return "{}{}-{}{}*".format(path, dataset_suffix, suffix, shard_str)
 
     def dataset(self,
                 mode,
@@ -625,8 +720,6 @@ class GoProblem19x19(GoProblem):
                  mode,
                  hparams,
                  data_dir=None,
-                 params=None,
-                 config=None,
                  force_repeat=False,
                  prevent_repeat=False,
                  dataset_suffix="",
@@ -636,29 +729,20 @@ class GoProblem19x19(GoProblem):
             mode: tf.estimator.ModeKeys
             hparams: HParams, model hparams
             data_dir: str, data directory; if None, will use hparams.data_dir
-            params: dict, may include "batch_size"
-            config: RunConfig; should have the data_parallelism attribute if not using
-                TPU
             force_repeat: bool, whether to repeat the data even if not training
             prevent_repeat: bool, whether to not repeat when in training mode.
                 Overrides force_repeat.
             dataset_suffix: str, if provided, will only read from the specified dataset
             dataset_kwargs: dict, if passed, will pass as kwargs to self.dataset
                 method when called
-            Returns:
-                (features_dict<str name, Tensor feature>, Tensor targets)
+        Returns:
+            (features_dict<str name, Tensor feature>, Tensor targets)
         """
-        partition_id, num_partitions = self._dataset_partition(mode, config)
-
         is_training = mode == tf.estimator.ModeKeys.TRAIN
-
         num_threads = problem.cpu_count() if is_training else 1
 
-        max_length = self.max_length(hparams)
-
-        def define_shapes(example):
-            batch_size = config and config.use_tpu and params["batch_size"]
-            return problem.standardize_shapes(example, batch_size=batch_size)
+        def gpu_valid_size(example):
+            return data_utils.example_valid_size(example, hparams.min_length)
 
         # Read and preprocess
         data_dir = data_dir or (hasattr(hparams, "data_dir") and hparams.data_dir)
@@ -669,8 +753,6 @@ class GoProblem19x19(GoProblem):
             "data_dir": data_dir,
             "num_threads": num_threads,
             "hparams": hparams,
-            "partition_id": partition_id,
-            "num_partitions": num_partitions,
             "dataset_suffix": dataset_suffix
         })
 
@@ -692,19 +774,15 @@ class GoProblem19x19(GoProblem):
         dataset = dataset.map(
             data_reader.cast_ints_to_int32, num_parallel_calls=num_threads)
 
-        # Batching
-        # TODO: bucket Batching
+        dataset = dataset.filter(gpu_valid_size)
 
-        dataset = dataset.map(define_shapes, num_parallel_calls=num_threads)
+        dataset = dataset.apply(
+            tf.contrib.data.bucket_by_sequence_length(
+                data_utils.example_length, [], [hparams.batch_size]))
 
         def prepare_for_output(example):
-            if not config or not config.use_tpu:
-                problem._summarize_features(example, (config and config.data_parallelism.n) or 1)
-            if mode == tf.estimator.ModeKeys.PREDICT:
-                example["infer_targets"] = example.pop("targets")
-                return example
-            else:
-                return example, example["targets"]
+            problem._summarize_features(example, 1)
+            return example
 
         dataset = dataset.map(prepare_for_output, num_parallel_calls=num_threads)
         dataset = dataset.prefetch(2)
