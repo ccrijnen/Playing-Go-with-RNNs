@@ -36,28 +36,33 @@ def print_go_position(board):
     print(go_game)
 
 
-def parse_sgf(filename, board_size, sort_by_color=False):
+def parse_sgf(filename, board_size, dataset_name):
     """Parses a sgf file to a game dict.
 
     Args:
-        filename: str, path of the sgf file
-        board_size: int, board size
-        sort_by_color: bool, if True sort sequences by first black then white
+        filename: (str), path of the sgf file
+        board_size: (int), board size
+        dataset_name: (str) optional, name of the dataset
     Returns:
         A dictionary representing a go game with the following fields:
-        * positions: str of [game_length, 3, board_size, board_size] np.array, encoded game positions
-        * p_targets: [game_length] int list, index of the played move (incl. pass move)
-        * v_targets: [game_length] int list, winner of the game, 1 if current player is winning, -1 otherwise
-        * legal_moves: str of [game_length, num_moves] np.array, encoded legal_moves at every position
-        * game_length: int, game length
+        * positions: (str) of [game_length, board_size, board_size] np.array, encoded game positions,
+            stones BLACK: 1 and WHITE: -1
+        * p_targets: (int) list, shape: [game_length], index of the played move (incl. pass move)
+        * legal_moves: (str) of [game_length, num_moves] np.array, encoded legal_moves at every position
+        * to_play: (int), current player, BLACK: 1, WHITE: -1
+        * game_length: (int), game length
+        * winner: (int), winner of the game, BLACK: 1, WHITE: -1, DRAW: 0
+        * dataset_name: (str), either 'kgs' or 'gogod' to
         Fields positions, legal_moves, game_length is actually a list of the corresponding type.
 
         or
 
         None if one of these to Errors occurs:
-        * sgf contains no moves, affects about 1% of files in KGS dataset
-        * move in the sgf breaks the minigo ko rule, affects about 1% of files in GoGoD dataset
+        * sgf contains no moves, affects about 1% of files in KGS dataset_name
+        * move in the sgf breaks the minigo ko rule, affects about 1% of files in GoGoD dataset_name
     """
+    assert dataset_name in ["gogod", "kgs"]
+
     go.set_board_size(board_size)
 
     sgf_board, plays, sgf_game = read_sgf(filename)
@@ -70,7 +75,6 @@ def parse_sgf(filename, board_size, sort_by_color=False):
 
     initial_board = _prep_board(np_board)
     plays = _prep_plays(plays)
-    winner = _get_winner(sgf_game)
 
     try:
         first_player = _get_first_player(plays)
@@ -81,28 +85,27 @@ def parse_sgf(filename, board_size, sort_by_color=False):
     num_moves = go.BOARD_SIZE * go.BOARD_SIZE + 1
 
     game_length = len(plays)
-    positions = np.zeros([game_length, 3, go.BOARD_SIZE, go.BOARD_SIZE], dtype=np.uint8)
+    winner = _get_winner(sgf_game)
+    to_play = np.zeros([game_length], dtype=np.int8)
+    positions = np.zeros([game_length, go.BOARD_SIZE, go.BOARD_SIZE], dtype=np.int8)
     p_targets = np.zeros([game_length], dtype=np.int16)
-    v_targets = np.zeros([game_length], dtype=np.int8)
     legal_moves = np.zeros([game_length, num_moves], dtype=np.uint8)
 
     go_game = go.GoEnvironment(None, initial_board, to_play=first_player)
 
     for i, play in enumerate(plays):
+        # colour: (int) 1 if the current player is BLACK else -1 for WHITE
+        # move: (tuple) or (None), coordinate of the next move (from the upper left corner), None if move is pass
         colour, move = play
+        to_play[i] = colour
 
-        # create board position [3, board_size, board_size]
+        # create board position [board_size, board_size]
         board = go_game.board
-        np_board = _generate_board(board, colour)
-        positions[i] = np_board
+        positions[i] = board
 
         # create policy target int in [0, board_size * board_size + 1)
         p_target = _generate_p_target(move)
         p_targets[i] = p_target
-
-        # create value target: 1 if colour is winning -1 if enemy colour is winning
-        v_target = _generate_v_target(winner, colour)
-        v_targets[i] = v_target
 
         # create legal_moves
         legal_move = go_game.all_legal_moves()
@@ -112,24 +115,18 @@ def parse_sgf(filename, board_size, sort_by_color=False):
         try:
             go_game.play_move(move, colour, True)
         except go.IllegalMove:
-            tf.logging.error("Skipped reading Go game from sgf '{}' because IllegalMove error occurred!".format(filename))
+            tf.logging.error("Skipped reading Go game from sgf '{}' because IllegalMove error occurred!"
+                             .format(filename))
             return None
-
-    if sort_by_color:
-        mask_w = positions[:, 2, 0, 0] == 0
-        mask = np.argsort(mask_w, kind='mergesort')
-
-        positions = positions[mask]
-        p_targets = p_targets[mask]
-        v_targets = v_targets[mask]
-        legal_moves = legal_moves[mask]
 
     data = {
         'positions': [positions.tostring()],
         'p_targets': p_targets.tolist(),
-        'v_targets': v_targets.tolist(),
         'legal_moves': [legal_moves.tostring()],
-        'game_length': [game_length]
+        'to_play': [to_play.tostring()],
+        'game_length': [game_length],
+        'winner': [winner],
+        'dataset_name': [dataset_name]
     }
 
     return data
@@ -187,7 +184,6 @@ def _prep_plays(plays):
 
 def _flip_row_coordinates(move):
     """Flips a coordinate of a move horizontally.
-
     Args:
         move: row, col index or None if pass move
     Returns:
@@ -204,7 +200,6 @@ def _flip_row_coordinates(move):
 
 def _get_winner(sgf_game):
     """Reads the games winner from an sgf.
-
     Args:
         sgf_game: from bytes parsed sgf
     Returns:
@@ -226,7 +221,6 @@ def _get_winner(sgf_game):
 
 def _get_first_player(plays):
     """Reads fist player.
-
     Args:
         plays: list of (color, move) tuples
     Returns:
@@ -239,49 +233,6 @@ def _get_first_player(plays):
     return first_player
 
 
-def _generate_board(board, to_play):
-    """Generates output board.
-
-    Args:
-        board: [19, 19] numpy array with stone colors
-        to_play: color of current player, BLACK = 1 and WHITE = -1
-    Returns:
-        [3, 19, 19] numpy array:
-        * channel 0: current player stones
-        * channel 1: enemy player stons
-        * channel 2: 1 if current player is BLACK, 0 for WHITE
-    """
-    np_board = np.zeros([3, go.BOARD_SIZE, go.BOARD_SIZE])
-
-    mask_black = board == go.BLACK
-    mask_white = board == go.WHITE
-
-    if to_play == go.BLACK:
-        np_board[0][mask_black] = 1
-        np_board[1][mask_white] = 1
-        np_board[2] = np.ones([go.BOARD_SIZE, go.BOARD_SIZE])
-    else:
-        np_board[0][mask_white] = 1
-        np_board[1][mask_black] = 1
-
-    return np_board
-
-
 def _generate_p_target(move):
     """Generate the flat index of a move."""
     return coordinates.to_flat(move)
-
-
-def _generate_v_target(winner, to_play):
-    """Generate the winner from the current players PoV.
-
-    Args:
-        winner: absolute winner BLACK = 1, WHITE = -1, DRAW = 0
-        to_play: color of the current player
-    Returns:
-        1 if current player is winning
-       -1 if enemy is winning
-    """
-    if to_play == go.BLACK:
-        return winner
-    return winner * -1

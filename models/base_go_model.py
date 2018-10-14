@@ -40,7 +40,7 @@ class GoModel(object):
         return self._hparams.mode == tf.estimator.ModeKeys.PREDICT
 
     def set_mode(self, mode):
-        """Set hparams with the given mode."""
+        """Set hp with the given mode."""
         log_info("Setting GoModel mode to '%s'", mode)
         hparams = copy.copy(self._original_hparams)
         hparams.add_hparam("mode", mode)
@@ -48,7 +48,7 @@ class GoModel(object):
         if mode != tf.estimator.ModeKeys.TRAIN:
             for key in hparams.values():
                 if key.endswith("dropout") or key == "label_smoothing":
-                    log_info("Setting hparams.%s to 0.0", key)
+                    log_info("Setting hp.%s to 0.0", key)
                     setattr(hparams, key, 0.0)
         self._hparams = hparams
 
@@ -108,28 +108,40 @@ class GoModel(object):
             transformed_features = self.bottom(features)
             body_out = self.body(transformed_features)
             logits = self.top(body_out, transformed_features)
-
             p_out, v_out = logits
-            p_preds = tf.argmax(p_out, -1, output_type=tf.int32)
-            v_preds = tf.round(v_out)
 
-        p_loss, v_loss, l2_loss = self.loss(logits, transformed_features)
-        loss = p_loss + hp.value_loss_weight * v_loss + l2_loss
+            with tf.variable_scope('predictions'):
+                p_preds = tf.argmax(p_out, -1, output_type=tf.int32)
+                v_preds = v_out
 
-        p_targets = transformed_features["p_targets"]
-        p_acc = tf.reduce_mean(tf.cast(tf.equal(p_targets, p_preds), tf.float32))
+        if mode == tf.estimator.ModeKeys.PREDICT:
+            model_spec = transformed_features
+            variable_init_op = tf.group(*[tf.global_variables_initializer(), tf.tables_initializer()])
+            model_spec['variable_init_op'] = variable_init_op
 
-        v_targets = transformed_features["v_targets"]
-        v_acc = tf.reduce_mean(tf.cast(tf.equal(v_targets, v_preds), tf.float32))
+            model_spec['policy_predictions'] = p_preds
+            model_spec['value_predictions'] = v_preds
+
+            return model_spec
+
+        with tf.variable_scope('losses'):
+            p_loss, v_loss, l2_loss = self.loss(logits, transformed_features)
+            loss = p_loss + hp.value_loss_weight * v_loss + l2_loss
+
+        with tf.variable_scope('policy_accuracy'):
+            p_targets = transformed_features["p_targets"]
+            p_correct = tf.equal(p_targets, p_preds)
+            p_acc = tf.reduce_mean(tf.cast(p_correct, tf.float32))
 
         if is_training:
-            global_step = tf.train.get_or_create_global_step()
-            learning_rate = tf.train.piecewise_constant(global_step, hp.lr_boundaries, hp.lr_rates)
+            with tf.variable_scope('train_ops'):
+                global_step = tf.train.get_or_create_global_step()
+                learning_rate = tf.train.piecewise_constant(global_step, hp.lr_boundaries, hp.lr_rates)
 
-            optimizer = tf.train.MomentumOptimizer(learning_rate, hp.sgd_momentum)
+                optimizer = tf.train.MomentumOptimizer(learning_rate, hp.sgd_momentum)
 
-            with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-                train_op = optimizer.minimize(loss, global_step=global_step)
+                with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
+                    train_op = optimizer.minimize(loss, global_step=global_step)
 
         # -----------------------------------------------------------
         # METRICS AND SUMMARIES
@@ -137,12 +149,25 @@ class GoModel(object):
         with tf.variable_scope("metrics"):
             metrics = {
                 'policy_accuracy': tf.metrics.accuracy(labels=p_targets, predictions=p_preds),
-                'value_accuracy': tf.metrics.accuracy(labels=v_targets, predictions=v_preds),
                 'policy_loss': tf.metrics.mean(p_loss),
                 'value_loss': tf.metrics.mean(v_loss),
-                'l2_loss': tf.metrics.mean(l2_loss),
                 'loss': tf.metrics.mean(loss)
             }
+            if hp.multiple_datasets:
+                dataset = features["dataset_name"]
+                mask_gogod = tf.equal(dataset, "gogod")
+                mask_kgs = tf.equal(dataset, "kgs")
+
+                metrics.update({
+                    'policy_accuracy_gogod': tf.metrics.accuracy(labels=p_targets, predictions=p_preds,
+                                                                 weights=mask_gogod),
+                    'policy_accuracy_kgs': tf.metrics.accuracy(labels=p_targets, predictions=p_preds,
+                                                               weights=mask_kgs),
+                    'policy_loss_gogod': tf.metrics.mean(p_loss, weights=mask_gogod),
+                    'policy_loss_kgs': tf.metrics.mean(p_loss, weights=mask_kgs),
+                    'value_loss_gogod': tf.metrics.mean(v_loss, weights=mask_gogod),
+                    'value_loss_kgs': tf.metrics.mean(v_loss, weights=mask_kgs),
+                })
 
         # Group the update ops for the tf.metrics
         update_metrics_op = tf.group(*[op for _, op in metrics.values()])
@@ -153,7 +178,6 @@ class GoModel(object):
 
         # Summaries for training
         tf.summary.scalar('policy_accuracy', p_acc)
-        tf.summary.scalar('value_accuracy', v_acc)
         tf.summary.scalar('policy_loss', p_loss)
         tf.summary.scalar('value_loss', v_loss)
         tf.summary.scalar('l2_loss', l2_loss)
@@ -174,7 +198,6 @@ class GoModel(object):
         model_spec['loss'] = loss
 
         model_spec['policy_accuracy'] = p_acc
-        model_spec['value_accuracy'] = v_acc
 
         model_spec['metrics_init_op'] = metrics_init_op
         model_spec['metrics'] = metrics

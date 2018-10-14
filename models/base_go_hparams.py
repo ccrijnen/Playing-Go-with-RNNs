@@ -8,7 +8,7 @@ def base_go_hparams():
 
         # During training, we drop sequences whose inputs and targets are shorter
         # than min_length
-        min_length=40,
+        min_length=50,
 
         batch_size=2,
 

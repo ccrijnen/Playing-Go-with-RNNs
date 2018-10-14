@@ -5,21 +5,17 @@ import os
 from utils import utils
 from tqdm import trange
 from tensor2tensor.data_generators.problem import DatasetSplit
-from data_generators import go_problem
-from models.base_go_model import GoModel
+from data_generators import base_go_problem
+from models import base_go_model
 
 
 class GoTrainer:
     def __init__(self, problem, model, hparams):
-        assert isinstance(problem, go_problem.GoProblem)
-        self.hparams = hparams
-        self.multiple_datasets = problem.multiple_datasets
-        if self.multiple_datasets:
-            assert isinstance(problem, go_problem.GoProblem19x19)
+        assert isinstance(problem, base_go_problem.GoProblem)
+        assert isinstance(model, base_go_model.GoModel)
 
+        self.hp = hparams
         self.problem = problem
-
-        assert isinstance(model, GoModel)
         self.model = model
 
     def train_epoch(self, sess, model_spec, num_steps, writer):
@@ -30,11 +26,10 @@ class GoTrainer:
             num_steps: (int) train for this number of batches
             writer: (tf.summary.FileWriter) writer for summaries
         """
-        hp = self.hparams
+        hp = self.hp
 
         # Get relevant graph operations or nodes needed for training
         loss = model_spec['loss']
-
         train_op = model_spec['train_op']
         update_metrics = model_spec['update_metrics']
         metrics = model_spec['metrics']
@@ -73,7 +68,7 @@ class GoTrainer:
             num_steps: (int) train for this number of batches
             writer: (tf.summary.FileWriter) writer for summaries. Is None if we don't log anything
         """
-        hp = self.hparams
+        hp = self.hp
 
         update_metrics = model_spec['update_metrics']
         eval_metrics = model_spec['metrics']
@@ -107,22 +102,16 @@ class GoTrainer:
         Args:
             restore_from: (string) directory or file containing weights to restore the graph
         """
-        hp = self.hparams
+        hp = self.hp
         experiment_dir = hp.experiment_dir
 
         tf.logging.info("Starting training for {} epoch(s)".format(hp.num_epochs))
 
         split = DatasetSplit.TRAIN
-        mode = self._split_to_mode(split)
-        with tf.variable_scope('train_datasets'):
-            train_datasets = self._get_datasets(split)
-        train_model_spec = self._get_model_spec(train_datasets, mode)
+        train_model_spec = self._get_model_spec(split)
 
         split = DatasetSplit.EVAL
-        mode = self._split_to_mode(split)
-        with tf.variable_scope('eval_datasets'):
-            eval_datasets = self._get_datasets(split)
-        eval_model_specs = self._get_model_spec(eval_datasets, mode)
+        eval_model_spec = self._get_model_spec(split)
 
         # Initialize tf.Saver instances to save weights during training
         last_saver = tf.train.Saver()  # will keep last 5 epochs
@@ -143,22 +132,15 @@ class GoTrainer:
 
             # For tensorboard (takes care of writing summaries to files)
             train_writer = tf.summary.FileWriter(os.path.join(experiment_dir, 'train_summaries'), sess.graph)
+            eval_writers = tf.summary.FileWriter(os.path.join(experiment_dir, 'eval_summaries'), sess.graph)
 
-            if self.multiple_datasets:
-                eval_writers = {
-                    "gogod": tf.summary.FileWriter(os.path.join(experiment_dir, 'eval_summaries_gogod'), sess.graph),
-                    "kgs": tf.summary.FileWriter(os.path.join(experiment_dir, 'eval_summaries_kgs'), sess.graph)
-                }
-            else:
-                eval_writers = tf.summary.FileWriter(os.path.join(experiment_dir, 'eval_summaries'), sess.graph)
-
-            best_accs = BestAccs(self.multiple_datasets)
-
+            best_eval_p_acc = 0.0
+            best_eval_v_loss = np.inf
             for epoch in range(begin_at_epoch, begin_at_epoch + hp.num_epochs):
                 # Run one epoch
                 tf.logging.info("Epoch {}/{}".format(epoch + 1, begin_at_epoch + hp.num_epochs))
                 # Compute number of batches in one epoch (one full pass over the training set)
-                num_steps = self._num_steps(hp.train_size)
+                num_steps = (hp.train_size + hp.batch_size - 1) // hp.batch_size
                 self.train_epoch(sess, train_model_spec, num_steps, train_writer)
 
                 # Save weights
@@ -167,28 +149,16 @@ class GoTrainer:
                 last_saver.save(sess, last_save_path, global_step=epoch + 1)
 
                 # Evaluate for one epoch on validation set
-                if isinstance(eval_model_specs, dict):
-                    num_steps = {
-                        "gogod": self._num_steps(hp.gogod_dev_size),
-                        "kgs": self._num_steps(hp.kgs_dev_size)
-                    }
-
-                    metrics = {}
-                    for dataset_name, eval_model_spec in eval_model_specs.items():
-                        eval_writer = eval_writers[dataset_name]
-                        temp_metrics = self.evaluate_epoch(sess, eval_model_spec, num_steps[dataset_name], eval_writer)
-                        for metric_name, value in temp_metrics.items():
-                            metrics[dataset_name + "_" + metric_name] = value
-                else:
-                    num_steps = self._num_steps(hp.dev_size)
-                    eval_model_spec = eval_model_specs
-                    metrics = self.evaluate_epoch(sess, eval_model_spec, num_steps, eval_writers)
+                num_steps = (hp.dev_size + hp.batch_size - 1) // hp.batch_size
+                metrics = self.evaluate_epoch(sess, eval_model_spec, num_steps, eval_writers)
 
                 # If best_eval, best_save_path
-                cond = best_accs.get_condition(metrics)
-                if cond:
+                eval_p_acc = metrics['policy_accuracy']
+                eval_v_loss = metrics['value_loss']
+                if eval_p_acc >= best_eval_p_acc and eval_v_loss <= best_eval_v_loss:
                     # Store new best accuracy
-                    best_accs.update_accs(metrics)
+                    best_eval_p_acc = eval_p_acc
+                    best_eval_v_loss = eval_v_loss
                     # Save weights
                     best_save_path = os.path.join(experiment_dir, 'best_weights', 'after-epoch')
                     tf.gfile.MakeDirs(os.path.join(experiment_dir, 'best_weights'))
@@ -207,25 +177,18 @@ class GoTrainer:
         Args:
             restore_from: (string) directory or file containing weights to restore the graph
         """
-        hp = self.hparams
+        hp = self.hp
         experiment_dir = hp.experiment_dir
 
         split = DatasetSplit.TEST
-        mode = self._split_to_mode(split)
-        with tf.variable_scope('test_datasets'):
-            datasets = self._get_datasets(split)
-        model_specs = self._get_model_spec(datasets, mode)
+        model_spec = self._get_model_spec(split)
 
         # Initialize tf.Saver
         saver = tf.train.Saver()
 
         with tf.Session() as sess:
             # Initialize the lookup table
-            if isinstance(model_specs, dict):
-                for _, model_spec in model_specs.items():
-                    sess.run(model_spec['variable_init_op'])
-            else:
-                sess.run(model_specs['variable_init_op'])
+            sess.run(model_spec['variable_init_op'])
 
             # Reload weights from the weights subdirectory
             save_path = os.path.join(experiment_dir, restore_from)
@@ -234,29 +197,11 @@ class GoTrainer:
             saver.restore(sess, save_path)
 
             # Evaluate
-            if isinstance(model_specs, dict):
-                num_steps = {
-                    "gogod": self._num_steps(hp.gogod_test_size),
-                    "kgs": self._num_steps(hp.kgs_test_size)
-                }
-
-                metrics = {}
-                for dataset_name, test_model_spec in model_specs.items():
-                    temp_metrics = self.evaluate_epoch(sess, test_model_spec, num_steps[dataset_name])
-                    for metric_name, value in temp_metrics.items():
-                        metrics[dataset_name + "_" + metric_name] = value
-            else:
-                num_steps = self._num_steps(hp.test_size)
-                test_model_spec = model_specs
-                metrics = self.evaluate_epoch(sess, test_model_spec, num_steps)
-
+            num_steps = (hp.test_size + hp.batch_size - 1) // hp.batch_size
+            metrics = self.evaluate_epoch(sess, model_spec, num_steps)
             metrics_name = '_'.join(restore_from.split('/'))
             save_path = os.path.join(experiment_dir, "metrics_test_{}.json".format(metrics_name))
             utils.save_dict_to_json(metrics, save_path)
-
-    def _num_steps(self, size):
-        hp = self.hparams
-        return (size + hp.batch_size - 1) // hp.batch_size
 
     @staticmethod
     def _split_to_mode(split):
@@ -267,99 +212,27 @@ class GoTrainer:
         }
         return split_to_mode[split]
 
-    def _get_datasets(self, dataset_split):
+    def _get_model_spec(self, dataset_split):
         problem = self.problem
-        hp = self.hparams
-
+        hp = self.hp
         mode = self._split_to_mode(dataset_split)
 
         dataset_kwargs = {
             "dataset_split": dataset_split
         }
 
-        if self.multiple_datasets and not dataset_split == DatasetSplit.TRAIN:
-            gogod_dataset = problem.input_fn(mode, hp, dataset_suffix="-gogod", dataset_kwargs=dataset_kwargs,
-                                             prevent_repeat=True)
-            kgs_dataset = problem.input_fn(mode, hp, dataset_suffix="-kgs", dataset_kwargs=dataset_kwargs,
-                                           prevent_repeat=True)
-            datasets = {
-                "gogod": gogod_dataset,
-                "kgs": kgs_dataset
-            }
-        else:
-            datasets = problem.input_fn(mode, hp, dataset_kwargs=dataset_kwargs, prevent_repeat=True)
+        tf.logging.info("Loading the dataset...")
+        dataset = problem.input_fn(mode, hp, dataset_kwargs=dataset_kwargs, prevent_repeat=True)
+        tf.logging.info("- done.")
 
-        return datasets
-
-    def _get_model_spec(self, datasets, mode):
         model = self.model
 
         tf.logging.info("Creating the model...")
+        iterator = dataset.make_initializable_iterator()
+        init_op = iterator.initializer
 
-        if isinstance(datasets, dict):
-            model_specs = {}
-            for k, dataset in datasets.items():
-                iterator = dataset.make_initializable_iterator()
-                init_op = iterator.initializer
-
-                features = iterator.get_next()
-                model_spec = model.model_fn(features, mode)
-                model_spec["iterator_init_op"] = init_op
-
-                model_specs[k] = model_spec
-
-            tf.logging.info("- done.")
-            return model_specs
-        else:
-            iterator = datasets.make_initializable_iterator()
-            init_op = iterator.initializer
-
-            features = iterator.get_next()
-            model_spec = model.model_fn(features, mode)
-            model_spec["iterator_init_op"] = init_op
-
-            tf.logging.info("- done.")
-            return model_spec
-
-
-class BestAccs:
-    def __init__(self, multiple_datasets):
-        self.multiple_datasets = multiple_datasets
-
-        self.best_eval_p_acc1 = 0.0
-        self.best_eval_v_loss1 = np.inf
-
-        if multiple_datasets:
-            self.best_eval_p_acc2 = 0.0
-            self.best_eval_v_loss2 = np.inf
-
-    def _multiple_cond(self, metrics):
-        eval_p_acc1 = metrics['gogod_policy_accuracy']
-        eval_v_loss1 = metrics['gogod_value_loss']
-        cond1 = eval_p_acc1 >= self.best_eval_p_acc1 and eval_v_loss1 <= self.best_eval_v_loss1
-
-        eval_p_acc2 = metrics['kgs_policy_accuracy']
-        eval_v_loss2 = metrics['kgs_value_loss']
-        cond2 = eval_p_acc2 >= self.best_eval_p_acc2 and eval_v_loss2 <= self.best_eval_v_loss2
-
-        return cond1 and cond2
-
-    def _single_cond(self, metrics):
-        eval_p_acc1 = metrics['policy_accuracy']
-        eval_v_loss1 = metrics['value_loss']
-
-        return eval_p_acc1 >= self.best_eval_p_acc1 and eval_v_loss1 <= self.best_eval_v_loss1
-
-    def get_condition(self, metrics):
-        if self.multiple_datasets:
-            return self._multiple_cond(metrics)
-        else:
-            return self._single_cond(metrics)
-
-    def update_accs(self, metrics):
-        self.best_eval_p_acc1 = metrics.get('policy_accuracy') or metrics.get('gogod_policy_accuracy')
-        self.best_eval_v_loss1 = metrics.get('value_accuracy') or metrics.get('gogod_value_accuracy')
-
-        if self.multiple_datasets:
-            self.best_eval_p_acc2 = metrics['kgs_policy_accuracy']
-            self.best_eval_v_loss2 = metrics['kgs_value_accuracy']
+        features = iterator.get_next()
+        model_spec = model.model_fn(features, mode)
+        model_spec["iterator_init_op"] = init_op
+        tf.logging.info("- done.")
+        return model_spec
