@@ -140,37 +140,51 @@ class GoTrainer:
                 # Run one epoch
                 tf.logging.info("Epoch {}/{}".format(epoch + 1, begin_at_epoch + hp.num_epochs))
                 # Compute number of batches in one epoch (one full pass over the training set)
-                num_steps = (hp.train_size + hp.batch_size - 1) // hp.batch_size
-                self.train_epoch(sess, train_model_spec, num_steps, train_writer)
+                total_train_steps = (hp.train_size + hp.batch_size - 1) // hp.batch_size
+                mod = total_train_steps % hp.eval_every
 
-                # Save weights
-                last_save_path = os.path.join(experiment_dir, 'last_weights', 'after-epoch')
-                tf.gfile.MakeDirs(os.path.join(experiment_dir, 'last_weights'))
-                last_saver.save(sess, last_save_path, global_step=epoch + 1)
+                split_train_steps = [hp.eval_every] * (total_train_steps // hp.eval_every)
+                split_train_steps += [mod] if mod is not 0 else []
 
-                # Evaluate for one epoch on validation set
-                num_steps = (hp.dev_size + hp.batch_size - 1) // hp.batch_size
-                metrics = self.evaluate_epoch(sess, eval_model_spec, num_steps, eval_writers)
+                total_eval_steps = (hp.dev_size + hp.batch_size - 1) // hp.batch_size
+                length = (len(split_train_steps) - 1)
+                if length is not 0:
+                    split_eval_steps = [total_eval_steps // length] * length + [total_eval_steps % length]
+                else:
+                    split_eval_steps = [total_eval_steps]
 
-                # If best_eval, best_save_path
-                eval_p_acc = metrics['policy_accuracy']
-                eval_v_loss = metrics['value_loss']
-                if eval_p_acc >= best_eval_p_acc and eval_v_loss <= best_eval_v_loss:
-                    # Store new best accuracy
-                    best_eval_p_acc = eval_p_acc
-                    best_eval_v_loss = eval_v_loss
+                for i, (t_steps, e_steps) in enumerate(zip(split_train_steps, split_eval_steps)):
+                    tf.logging.info("Sub epoch {}/{} with {} train steps"
+                                    .format(i + 1, len(split_train_steps), hp.eval_every))
+                    self.train_epoch(sess, train_model_spec, t_steps, train_writer)
+
                     # Save weights
-                    best_save_path = os.path.join(experiment_dir, 'best_weights', 'after-epoch')
-                    tf.gfile.MakeDirs(os.path.join(experiment_dir, 'best_weights'))
-                    best_save_path = best_saver.save(sess, best_save_path, global_step=epoch + 1)
-                    tf.logging.info("- Found new best accuracy, saving in {}".format(best_save_path))
-                    # Save best eval metrics in a json file in the model directory
-                    best_json_path = os.path.join(experiment_dir, "metrics_eval_best_weights.json")
-                    utils.save_dict_to_json(metrics, best_json_path)
+                    last_save_path = os.path.join(experiment_dir, 'last_weights', 'after-epoch')
+                    tf.gfile.MakeDirs(os.path.join(experiment_dir, 'last_weights'))
+                    last_saver.save(sess, last_save_path, global_step=epoch + 1)
 
-                # Save latest eval metrics in a json file in the model directory
-                last_json_path = os.path.join(experiment_dir, "metrics_eval_last_weights.json")
-                utils.save_dict_to_json(metrics, last_json_path)
+                    # Evaluate for one sub epoch on validation set
+                    metrics = self.evaluate_epoch(sess, eval_model_spec, e_steps, eval_writers)
+
+                    # If best_eval, best_save_path
+                    eval_p_acc = metrics['policy_accuracy']
+                    eval_v_loss = metrics['value_loss']
+                    if eval_p_acc >= best_eval_p_acc and eval_v_loss <= best_eval_v_loss:
+                        # Store new best accuracy
+                        best_eval_p_acc = eval_p_acc
+                        best_eval_v_loss = eval_v_loss
+                        # Save weights
+                        best_save_path = os.path.join(experiment_dir, 'best_weights', 'after-epoch')
+                        tf.gfile.MakeDirs(os.path.join(experiment_dir, 'best_weights'))
+                        best_save_path = best_saver.save(sess, best_save_path, global_step=epoch + 1)
+                        tf.logging.info("- Found new best accuracy, saving in {}".format(best_save_path))
+                        # Save best eval metrics in a json file in the model directory
+                        best_json_path = os.path.join(experiment_dir, "metrics_eval_best_weights.json")
+                        utils.save_dict_to_json(metrics, best_json_path)
+
+                    # Save latest eval metrics in a json file in the model directory
+                    last_json_path = os.path.join(experiment_dir, "metrics_eval_last_weights.json")
+                    utils.save_dict_to_json(metrics, last_json_path)
 
     def test(self, restore_from):
         """Test the model

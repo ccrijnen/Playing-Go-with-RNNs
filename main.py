@@ -8,12 +8,12 @@ import numpy as np
 import trainer
 from models.base_go_hparams import base_go_hparams
 from data_generators import go_problem_19
-from models import lstm_model
+from models import go_models_rnn, go_models_cnn
 from utils import utils
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--experiment_dir',
-                    help="Directory containing params.json", required=True)
+                    help="Directory to save summaries and log to", required=True)
 parser.add_argument('--restore_dir', default=None,
                     help="Optional, directory containing weights to reload before training")
 
@@ -24,7 +24,9 @@ def set_random_seed(seed):
     np.random.seed(seed)
 
 
-def main(args):
+def main():
+    args = parser.parse_args()
+
     set_random_seed(230)
     tf.gfile.MakeDirs(args.experiment_dir)
 
@@ -39,7 +41,8 @@ def main(args):
 
     utils.set_logger(os.path.join(args.experiment_dir, 'train.log'))
 
-    prob = go_problem_19.GoProblem19x19()
+    prob = go_problem_19.GoProblem19Rnn()
+    # prob = go_problem_19.GoProblem19Cnn()
 
     # tf.logging.info("Creating the datasets...")
     # prob.generate_data(hp.data_dir, hp.tmp_dir)
@@ -47,12 +50,12 @@ def main(args):
 
     hp = prob.get_hparams(hp)
 
-    model = lstm_model.ConvLSTMModel(hp)
-    my_trainer = trainer.GoTrainer(prob, model, hp)
+    model = go_models_rnn.ConvLSTMModel(hp)
+    # model = go_models_cnn.AlphaZeroModel(hp)
 
+    my_trainer = trainer.GoTrainer(prob, model, hp)
     my_trainer.train_and_evaluate()
 
 
 if __name__ == '__main__':
-    args = parser.parse_args()
-    main(args)
+    main()

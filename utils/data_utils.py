@@ -3,44 +3,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import os
-import random
 import json
 
-from data_generators import base_go_problem, go_problem_19
 from utils import sgf_utils, utils
 
 
 class DatasetStats:
     def __init__(self, problem, hparams):
         # set random seed to make sure shuffle is re-creatable
-        random.seed(230)
-
         self.hparams = hparams
-
-        self.board_size = problem.board_size
-        self.multiple_datasets = problem.multiple_datasets
         self.sort_sequence_by_color = problem.sort_sequence_by_color
+        self.files = problem.generate_dataset(hparams.tmp_dir, False)
+        self.suffix = "_{}".format(problem.board_size)
 
-        gogod_files = base_go_problem.get_gogod_filenames(hparams.tmp_dir, problem.board_size)
-        train_gogod, dev_gogod, test_gogod = base_go_problem.split_dataset(gogod_files, problem.split_fractions)
+        if problem.use_gogod_data and problem.use_kgs_data:
+            self.suffix += "_multi"
+        elif problem.use_kgs_data:
+            self.suffix += "_kgs"
+        elif problem.use_gogod_data:
+            self.suffix += "_gogod"
 
-        self.files = {
-            "train": train_gogod,
-            "dev": dev_gogod,
-            "test": test_gogod
-        }
-        self.suffix = ""
-
-        if self.multiple_datasets:
-            kgs_files = base_go_problem.get_kgs_filenames(hparams.tmp_dir)
-            train_kgs, dev_kgs, test_kgs = base_go_problem.split_dataset(kgs_files, problem.split_fractions)
-            if isinstance(problem, go_problem_19.GoProblem19x19):
-                self.files = {
-                    "train": train_gogod + train_kgs,
-                    "dev": dev_gogod + dev_kgs,
-                    "test": test_gogod + test_kgs,
-                }
-                self.suffix = "_multi"
+        if problem.is_small:
+            self.suffix += "_toy"
 
     def print_stats(self):
         for k, lengths in self.lengths.items():
@@ -127,21 +111,22 @@ class DatasetStats:
 
         self.lengths = {}
 
-        for k, files in self.files.items():
+        for split, datasets in self.files.items():
             game_lengths = []
 
-            for file in files:
-                game_length = get_game_length(file)
-                if (min_length <= game_length <= max_length) or (min_length <= game_length and not max_length):
-                    game_lengths.append(game_length)
-            self.lengths[k] = np.array(game_lengths)
+            for _, filenames in datasets:
+                for file in filenames:
+                    game_length = get_game_length(file)
+                    if (min_length <= game_length <= max_length) or (min_length <= game_length and not max_length):
+                        game_lengths.append(game_length)
+            self.lengths[split] = np.array(game_lengths)
 
         self.sizes = {}
 
         for mode in modes:
             tmp = {}
-            for k, game_lengths in self.lengths.items():
-                tmp[k + "_size"] = mode_to_stat[mode](game_lengths)
+            for split, game_lengths in self.lengths.items():
+                tmp[split + "_size"] = mode_to_stat[mode](game_lengths)
             self.sizes[mode] = tmp
 
         max_str = "-{:03}".format(max_length) if max_length else ""

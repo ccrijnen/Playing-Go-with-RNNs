@@ -31,24 +31,16 @@ class GoModel(object):
     def hparams(self):
         return self._hparams
 
-    @property
-    def is_training(self):
-        return self._hparams.mode == tf.estimator.ModeKeys.TRAIN
-
-    @property
-    def is_predicting(self):
-        return self._hparams.mode == tf.estimator.ModeKeys.PREDICT
-
     def set_mode(self, mode):
         """Set hp with the given mode."""
-        log_info("Setting GoModel mode to '%s'", mode)
+        tf.logging.info("Setting GoModel mode to '%s'", mode)
         hparams = copy.copy(self._original_hparams)
         hparams.add_hparam("mode", mode)
         # When not in training mode, set all forms of dropout to zero.
         if mode != tf.estimator.ModeKeys.TRAIN:
             for key in hparams.values():
                 if key.endswith("dropout") or key == "label_smoothing":
-                    log_info("Setting hp.%s to 0.0", key)
+                    tf.logging.info("Setting hp.%s to 0.0", key)
                     setattr(hparams, key, 0.0)
         self._hparams = hparams
 
@@ -107,11 +99,12 @@ class GoModel(object):
         with tf.variable_scope('model', reuse=reuse):
             transformed_features = self.bottom(features)
             body_out = self.body(transformed_features)
-            logits = self.top(body_out, transformed_features)
-            p_out, v_out = logits
+            top_out = self.top(body_out, transformed_features)
+            p_logits, v_out = top_out
 
             with tf.variable_scope('predictions'):
-                p_preds = tf.argmax(p_out, -1, output_type=tf.int32)
+                p_preds = tf.nn.softmax(p_logits, name='policy_predictions')
+                p_preds_idx = tf.argmax(p_preds, -1, output_type=tf.int32)
                 v_preds = v_out
 
         if mode == tf.estimator.ModeKeys.PREDICT:
@@ -124,13 +117,16 @@ class GoModel(object):
 
             return model_spec
 
-        with tf.variable_scope('losses'):
-            p_loss, v_loss, l2_loss = self.loss(logits, transformed_features)
+        with tf.variable_scope('combined_loss'):
+            loss_list, losses_list = self.loss(top_out, transformed_features)
+
+            p_loss, v_loss, l2_loss = loss_list
+
             loss = p_loss + hp.value_loss_weight * v_loss + l2_loss
 
         with tf.variable_scope('policy_accuracy'):
             p_targets = transformed_features["p_targets"]
-            p_correct = tf.equal(p_targets, p_preds)
+            p_correct = tf.equal(p_targets, tf.argmax(p_preds, -1, output_type=tf.int32))
             p_acc = tf.reduce_mean(tf.cast(p_correct, tf.float32))
 
         if is_training:
@@ -148,25 +144,27 @@ class GoModel(object):
         # Metrics for evaluation using tf.metrics (average over whole dataset)
         with tf.variable_scope("metrics"):
             metrics = {
-                'policy_accuracy': tf.metrics.accuracy(labels=p_targets, predictions=p_preds),
+                'policy_accuracy': tf.metrics.accuracy(labels=p_targets, predictions=p_preds_idx),
                 'policy_loss': tf.metrics.mean(p_loss),
                 'value_loss': tf.metrics.mean(v_loss),
                 'loss': tf.metrics.mean(loss)
             }
-            if hp.multiple_datasets:
+            if hp.use_gogod_data and hp.use_kgs_data:
                 dataset = features["dataset_name"]
                 mask_gogod = tf.equal(dataset, "gogod")
                 mask_kgs = tf.equal(dataset, "kgs")
 
+                p_losses, v_losses = losses_list
+
                 metrics.update({
-                    'policy_accuracy_gogod': tf.metrics.accuracy(labels=p_targets, predictions=p_preds,
+                    'policy_accuracy_gogod': tf.metrics.accuracy(labels=p_targets, predictions=p_preds_idx,
                                                                  weights=mask_gogod),
-                    'policy_accuracy_kgs': tf.metrics.accuracy(labels=p_targets, predictions=p_preds,
+                    'policy_accuracy_kgs': tf.metrics.accuracy(labels=p_targets, predictions=p_preds_idx,
                                                                weights=mask_kgs),
-                    'policy_loss_gogod': tf.metrics.mean(p_loss, weights=mask_gogod),
-                    'policy_loss_kgs': tf.metrics.mean(p_loss, weights=mask_kgs),
-                    'value_loss_gogod': tf.metrics.mean(v_loss, weights=mask_gogod),
-                    'value_loss_kgs': tf.metrics.mean(v_loss, weights=mask_kgs),
+                    'policy_loss_gogod': tf.metrics.mean(p_losses, weights=mask_gogod),
+                    'policy_loss_kgs': tf.metrics.mean(p_losses, weights=mask_kgs),
+                    'value_loss_gogod': tf.metrics.mean(v_losses, weights=mask_gogod),
+                    'value_loss_kgs': tf.metrics.mean(v_losses, weights=mask_kgs),
                 })
 
         # Group the update ops for the tf.metrics
@@ -208,153 +206,3 @@ class GoModel(object):
             model_spec['train_op'] = train_op
 
         return model_spec
-
-
-class GoModelRNN(GoModel):
-    def rnn_cell(self, board_size ):
-        raise NotImplementedError("Abstract Method")
-
-    def top(self, body_output, features):
-        hp = self._hparams
-
-        board_size = hp.board_size
-        num_moves = hp.num_moves
-        is_training = hp.mode == tf.estimator.ModeKeys.TRAIN
-
-        legal_moves = features["legal_moves"]
-
-        body_output = tf.reshape(body_output, [-1, 2, board_size, board_size])
-
-        # Policy Head
-        with tf.variable_scope('policy_head'):
-            p_conv = self.my_conv2d(body_output, filters=2, kernel_size=1)
-            p_conv = self.my_batchnorm(p_conv, center=False, scale=False, training=is_training)
-            p_conv = tf.nn.relu(p_conv)
-
-            logits = tf.reshape(p_conv, [-1, self.max_game_length, 2 * board_size * board_size])
-            logits = tf.layers.dense(logits, num_moves)
-            logits = tf.multiply(logits, legal_moves)
-
-            p_output = tf.nn.softmax(logits, name='policy_output')
-
-        # Value Head
-        with tf.variable_scope('value_head'):
-            v_conv = self.my_conv2d(body_output, filters=1, kernel_size=1)
-            v_conv = self.my_batchnorm(v_conv, center=False, scale=False, training=is_training)
-            v_conv = tf.nn.relu(v_conv)
-
-            v_fc = tf.reshape(v_conv, [-1, self.max_game_length, board_size * board_size])
-            v_fc = tf.layers.dense(v_fc, 256)
-            v_fc = tf.nn.relu(v_fc)
-
-            v_output = tf.layers.dense(v_fc, 1)
-            v_output = tf.reshape(v_output, [-1, self.max_game_length])
-            v_output = tf.nn.tanh(v_output, name='value_output')
-
-        return p_output, v_output
-
-    def loss(self, logits, features):
-        hp = self._hparams
-
-        game_lengths = features["game_length"]
-        mask = tf.sequence_mask(game_lengths)
-
-        p_output, v_output = logits
-
-        with tf.variable_scope('policy_loss'):
-            p_targets = features["p_targets"]
-            p_losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=p_output, labels=p_targets)
-            p_losses = tf.boolean_mask(p_losses, mask)
-            p_loss = tf.reduce_mean(p_losses)
-
-        with tf.variable_scope('value_loss'):
-            v_targets = features['v_targets']
-            v_losses = tf.square(v_output - v_targets)
-            v_losses = tf.boolean_mask(v_losses, mask)
-            v_loss = tf.reduce_mean(v_losses)
-
-        with tf.variable_scope('l2_loss'):
-            reg_vars = [v for v in tf.trainable_variables()
-                        if 'bias' not in v.name and 'beta' not in v.name]
-            l2_loss = hp.reg_strength * tf.add_n([tf.nn.l2_loss(v) for v in reg_vars])
-
-        return p_loss, v_loss, l2_loss
-
-
-class GoModelCNN(GoModel):
-    def top(self, body_output, features):
-        hp = self._hparams
-
-        board_size = hp.board_size
-        num_moves = hp.num_moves
-        is_training = hp.mode == tf.estimator.ModeKeys.TRAIN
-
-        legal_moves = features["legal_moves"]
-
-        # Policy Head
-        with tf.variable_scope('policy_head'):
-            p_conv = self.my_conv2d(body_output, filters=2, kernel_size=1)
-            p_conv = self.my_batchnorm(p_conv, center=False, scale=False, training=is_training)
-            p_conv = tf.nn.relu(p_conv)
-
-            logits = tf.reshape(p_conv, [-1, 2 * board_size * board_size])
-            logits = tf.layers.dense(logits, num_moves)
-            logits = tf.multiply(logits, legal_moves)
-
-            p_output = tf.nn.softmax(logits, name='policy_output')
-
-        # Value Head
-        with tf.variable_scope('value_head'):
-            v_conv = self.my_conv2d(body_output, filters=1, kernel_size=1)
-            v_conv = self.my_batchnorm(v_conv, center=False, scale=False, training=is_training)
-            v_conv = tf.nn.relu(v_conv)
-
-            v_fc = tf.reshape(v_conv, [-1, board_size * board_size])
-            v_fc = tf.layers.dense(v_fc, 256)
-            v_fc = tf.nn.relu(v_fc)
-
-            v_output = tf.layers.dense(v_fc, 1)
-            v_output = tf.reshape(v_output, [-1])
-            v_output = tf.nn.tanh(v_output, name='value_output')
-
-        return p_output, v_output
-
-    def loss(self, logits, features):
-        hp = self._hparams
-
-        p_output, v_output = logits
-
-        with tf.variable_scope('policy_loss'):
-            p_targets = features["p_targets"]
-            p_losses = tf.nn.softmax_cross_entropy_with_logits_v2(logits=p_output, labels=p_targets)
-            p_loss = tf.reduce_mean(p_losses)
-
-        with tf.variable_scope('value_loss'):
-            v_targets = features['v_targets']
-            v_losses = tf.square(v_output - v_targets)
-            v_loss = tf.reduce_mean(v_losses)
-
-        with tf.variable_scope('l2_loss'):
-            reg_vars = [v for v in tf.trainable_variables()
-                        if 'bias' not in v.name and 'beta' not in v.name]
-            l2_loss = hp.reg_strength * tf.add_n([tf.nn.l2_loss(v) for v in reg_vars])
-
-        return p_loss, v_loss, l2_loss
-
-
-_already_logged = set()
-
-
-def _eager_log(level, *args):
-    if tf.contrib.eager.in_eager_mode() and args in _already_logged:
-        return
-    _already_logged.add(args)
-    getattr(tf.logging, level)(*args)
-
-
-def log_info(*args):
-    _eager_log("info", *args)
-
-
-def log_warn(*args):
-    _eager_log("warn", *args)

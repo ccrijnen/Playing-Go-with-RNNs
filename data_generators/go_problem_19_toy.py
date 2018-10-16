@@ -4,22 +4,22 @@ import random
 from data_generators import base_go_problem, go_preprocessing
 
 
-class GoProblem19(base_go_problem.GoProblem):
-    """Go Problem for 19x19 go games."""
+class GoProblem19Toy(base_go_problem.GoProblem):
+    """Small Go Problem for 19x19 go games (~1000 games)."""
     @property
     def board_size(self):
         return 19
 
     def dataset_filename(self):
-        return "go_problem_19"
+        return "go_problem_19_toy"
 
     @property
     def train_shards(self):
-        return 8
+        return 1
 
     @property
     def is_small(self):
-        return False
+        return True
 
     def generate_dataset(self, tmp_dir, unzip=True):
         # set random seed to make sure shuffle is recreatable
@@ -30,20 +30,28 @@ class GoProblem19(base_go_problem.GoProblem):
             "dev": [],
             "test": []
         }
+        sizes = {
+            "train": 400,
+            "dev": 50,
+            "test": 50
+        }
 
         if self.use_gogod_data:
             data_gogod = self.get_gogod_dataset(tmp_dir, unzip)
             for k in data:
-                data[k] += data_gogod[k]
-
+                size = sizes[k]
+                _data = data_gogod[k][0]
+                data[k] += [(_data[0], _data[1][:size])]
         if self.board_size == 19:
             data_kgs = self.get_kgs_dataset(tmp_dir, unzip)
             for k in data:
-                data[k] += data_kgs[k]
+                size = sizes[k]
+                _data = data_kgs[k][0]
+                data[k] += [(_data[0], _data[1][:size])]
         return data
 
 
-class GoProblem19Rnn(GoProblem19):
+class GoProblem19Rnn(GoProblem19Toy):
     @property
     def is_recurrent(self):
         return True
@@ -82,7 +90,7 @@ class GoProblem19Rnn(GoProblem19):
             return example
 
 
-class GoProblem19Cnn(GoProblem19):
+class GoProblem19Cnn(GoProblem19Toy):
     @property
     def is_recurrent(self):
         return False
@@ -101,6 +109,7 @@ class GoProblem19Cnn(GoProblem19):
             def _augment(ex):
                 ex = go_preprocessing.random_augmentation(ex, self.board_size, "cnn")
                 return ex
+
             dataset = dataset.map(_augment)
 
         return dataset

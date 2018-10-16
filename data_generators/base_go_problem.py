@@ -8,9 +8,10 @@ import re
 
 from tensor2tensor.data_generators import generator_utils
 from tensor2tensor.data_generators import problem
+from tensor2tensor.utils import data_reader
 
 from models.base_go_hparams import base_go_hparams
-from utils import sgf_utils
+from utils import data_utils, sgf_utils
 
 _GOGOD_ZIP_NAME = 'GoGoDSpring2018.zip'
 _GOGOD_FILENAMES_GLOB = '/*.sgf'
@@ -156,28 +157,24 @@ class GoProblem(problem.Problem):
         raise NotImplementedError
 
     @property
+    def train_shards(self):
+        raise NotImplementedError
+
+    @property
+    def is_small(self):
+        raise NotImplementedError
+
+    @property
+    def is_recurrent(self):
+        raise NotImplementedError
+
+    def generate_dataset(self, tmp_dir, unzip=True):
+        raise NotImplementedError
+
+    @property
     def num_moves(self):
         """Equivalent to num_classes."""
         return self.board_size * self.board_size + 1
-
-    @property
-    def multiple_datasets(self):
-        raise NotImplementedError
-
-    @property
-    def sort_sequence_by_color(self):
-        """
-        Set to True if you want to order the sequence of positions, targets and legal_moves in a game
-        by move color resulting in this order:
-            [black_1, ..., black_N, white_1, ..., white_K]
-
-        Set to False to preserve the sequence order from the sgf.
-        """
-        raise NotImplementedError
-
-    @property
-    def train_shards(self):
-        return 8
 
     @property
     def dev_shards(self):
@@ -195,8 +192,32 @@ class GoProblem(problem.Problem):
             problem.DatasetSplit.TEST: 0.1
         }
 
-    def add_sizes(self, hparams):
-        raise NotImplementedError
+    @property
+    def use_gogod_data(self):
+        return self._use_gogod_data
+
+    @use_gogod_data.setter
+    def use_gogod_data(self, use_gogod_data):
+        self._use_gogod_data = use_gogod_data
+
+    @property
+    def use_kgs_data(self):
+        return self._use_kgs_data
+
+    @use_kgs_data.setter
+    def use_kgs_data(self, use_kgs_data):
+        if self.board_size == 19:
+            self._use_kgs_data = use_kgs_data
+        else:
+            self._use_kgs_data = False
+
+    @property
+    def sort_sequence_by_color(self):
+        return self._sort_sequence_by_color
+
+    @sort_sequence_by_color.setter
+    def sort_sequence_by_color(self, sort_sequence_by_color):
+        self._sort_sequence_by_color = sort_sequence_by_color
 
     def generator(self, datasets):
         """Go game generator from sgf format.
@@ -217,6 +238,44 @@ class GoProblem(problem.Problem):
             for file in filenames:
                 yield sgf_utils.parse_sgf(file, self.board_size, dataset_name)
 
+    def get_gogod_dataset(self, tmp_dir, unzip=True):
+        # unzip gogod zips if not already done
+        if unzip:
+            maybe_unzip_gogod(tmp_dir)
+
+        # search all sgf files in the gogod dataset and shuffle the filnames
+        filenames_gogod = get_gogod_filenames(tmp_dir, self.board_size)
+
+        # split gogod filenames into train, dev and test
+        train_gogod, dev_gogod, test_gogod = split_dataset(filenames_gogod, self.split_fractions)
+        tf.logging.info("Split GoGoD data into train: {}, dev: {}, test: {} files!"
+                        .format(len(train_gogod), len(dev_gogod), len(test_gogod)))
+
+        return {
+            "train": [("gogod", train_gogod)],
+            "dev": [("gogod", dev_gogod)],
+            "test": [("gogod", test_gogod)]
+        }
+
+    def get_kgs_dataset(self, tmp_dir, unzip=True):
+        # unzip kgs zips if not already done
+        if unzip:
+            maybe_unzip_kgs(tmp_dir)
+
+        # search all sgf files in the kgs dataset and shuffle the filnames
+        filenames_kgs = get_kgs_filenames(tmp_dir)
+
+        # split kgs filenames into train, dev and test
+        train_kgs, dev_kgs, test_kgs = split_dataset(filenames_kgs, self.split_fractions)
+        tf.logging.info("Split KGS data into train: {}, dev: {}, test: {} files!"
+                        .format(len(train_kgs), len(dev_kgs), len(test_kgs)))
+
+        return {
+            "train": [("kgs", train_kgs)],
+            "dev": [("kgs", dev_kgs)],
+            "test": [("kgs", test_kgs)]
+        }
+
     def generate_data(self, data_dir, tmp_dir, task_id=-1):
         """Generates sharded Train, Dev and Test splits of the KGS and GoGoD Datasets.
 
@@ -230,55 +289,29 @@ class GoProblem(problem.Problem):
             tmp_dir: str, directory containing KGS and GoGoD zips
             task_id: int, task id.
         """
-        # set random seed to make sure shuffle is recreatable
-        random.seed(230)
+        data = self.generate_dataset(tmp_dir)
 
-        # unzip gogod and kgs zips if not already done
-        maybe_unzip_gogod(tmp_dir)
-        maybe_unzip_kgs(tmp_dir)
-
-        # search all sgf files in the gogod dataset and shuffle the filnames
-        filenames_gogod = get_gogod_filenames(tmp_dir, self.board_size)
-
-        # split gogod filenames into train, dev and test
-        train_gogod, dev_gogod, test_gogod = split_dataset(filenames_gogod, self.split_fractions)
-        tf.logging.info("Split GoGoD data into train: {}, dev: {}, test: {} files!"
-                        .format(len(train_gogod), len(dev_gogod), len(test_gogod)))
-
-        train_data = [("gogod", train_gogod)]
-        dev_data = [("gogod", dev_gogod)]
-        test_data = [("gogod", test_gogod)]
-
-        if self.multiple_datasets and self.board_size == 19:
-            # search all sgf files in the kgs dataset and shuffle the filnames
-            filenames_kgs = get_kgs_filenames(tmp_dir)
-
-            # split kgs filenames into train, dev and test
-            train_kgs, dev_kgs, test_kgs = split_dataset(filenames_kgs, self.split_fractions)
-            tf.logging.info("Split KGS data into train: {}, dev: {}, test: {} files!"
-                            .format(len(train_kgs), len(dev_kgs), len(test_kgs)))
-
-            train_data.append(("kgs", train_kgs))
-            dev_data.append(("kgs", dev_kgs))
-            test_data.append(("kgs", test_kgs))
+        for k, v in data.items():
+            if v == []:
+                raise ValueError("No {} files found!".format(k))
 
         # generate sharded TFRecord files of the train sgf's and shuffle
         tf.logging.info("Generating GoGoD and KGS train data")
-        train_gen = self.generator(train_data)
+        train_gen = self.generator(data["train"])
         train_paths = self.training_filepaths(data_dir, self.train_shards, shuffled=False)
         generator_utils.generate_files(train_gen, train_paths)
         generator_utils.shuffle_dataset(train_paths)
 
         # generate sharded TFRecord files of the dev sgf's and shuffle
         tf.logging.info("Generating GoGoD and KGS dev data")
-        dev_gen = self.generator(dev_data)
+        dev_gen = self.generator(data["dev"])
         dev_paths = self.dev_filepaths(data_dir, self.dev_shards, shuffled=False)
         generator_utils.generate_files(dev_gen, dev_paths)
         generator_utils.shuffle_dataset(dev_paths)
 
         # generate sharded TFRecord files of the test sgf's and shuffle
         tf.logging.info("Generating GoGoD and KGS test data")
-        test_gen = self.generator(test_data)
+        test_gen = self.generator(data["test"])
         test_paths = self.test_filepaths(data_dir, self.test_shards, shuffled=False)
         generator_utils.generate_files(test_gen, test_paths)
         generator_utils.shuffle_dataset(test_paths)
@@ -304,31 +337,241 @@ class GoProblem(problem.Problem):
         }
         return data_fields, data_items_to_decoders
 
-    def get_hparams(self, model_hparams=None):
+    def get_hparams(self, hparams=None):
         """Returns problem_hparams."""
-        if model_hparams is None:
-            model_hparams = base_go_hparams()
+        if hparams is None:
+            hparams = base_go_hparams()
         if self._hparams is not None:
             return self._hparams
 
-        model_hparams.add_hparam("max_length", 2 * self.board_size * self.board_size)
-        model_hparams.add_hparam("multiple_datasets", self.multiple_datasets)
+        hparams.add_hparam("max_length", 2 * self.board_size * self.board_size)
+        hparams.add_hparam("board_size", self.board_size)
+        hparams.add_hparam("num_moves", self.num_moves)
 
-        ret = self.hparams(model_hparams, model_hparams)
+        if hasattr(hparams, "sort_sequence_by_color"):
+            self.sort_sequence_by_color = hparams.sort_sequence_by_color
+        else:
+            self.sort_sequence_by_color = False
+
+        if hasattr(hparams, "use_gogod_data"):
+            self.use_gogod_data = hparams.use_gogod_data
+        else:
+            self.use_gogod_data = False
+
+        if hasattr(hparams, "use_kgs_data"):
+            self.use_kgs_data = hparams.use_kgs_data
+        else:
+            self.use_kgs_data = False
+
+        ret = self.add_hparams(hparams)
         if ret is not None:
             raise ValueError("The Problem subclass hp function should mutate "
                              "the defaults passed in and return None.")
 
-        self._hparams = model_hparams
+        if hparams.sort_sequence_by_color:
+            hparams.min_length = hparams.min_length // 2
+            hparams.max_length = hparams.max_length // 2
+
+        self._hparams = hparams
         return self._hparams
 
-    def hparams(self, defaults, model_hparams):
-        hp = model_hparams
+    def add_hparams(self, hparams):
+        stats = data_utils.DatasetStats(self, hparams)
+        if self.is_recurrent:
+            sizes = stats.get_sizes('rnn')
+        else:
+            sizes = stats.get_sizes('cnn')
 
-        hp.add_hparam("board_size", self.board_size)
-        hp.add_hparam("num_moves", self.num_moves)
+        for k, v in sizes.items():
+            hparams.add_hparam(k, v)
 
-        self.add_sizes(model_hparams)
+    def dataset(self,
+                mode,
+                data_dir=None,
+                num_threads=None,
+                output_buffer_size=None,
+                shuffle_files=None,
+                hparams=None,
+                preprocess=True,
+                dataset_split=None,
+                shard=None,
+                partition_id=0,
+                num_partitions=1,
+                max_records=-1,
+                only_last=False):
+        """Build a Dataset for this problem.
+        Args:
+            mode: tf.estimator.ModeKeys; determines which files to read from.
+            data_dir: directory that contains data files.
+            num_threads: int, number of threads to use for decode and preprocess
+                Dataset.map calls.
+            output_buffer_size: int, how many elements to prefetch at end of pipeline.
+            shuffle_files: whether to shuffle input files. Default behavior (i.e. when
+                shuffle_files=None) is to shuffle if mode == TRAIN.
+            hparams: tf.contrib.training.HParams; hp to be passed to
+                Problem.preprocess_example and Problem.hp. If None, will use a
+                default set that is a no-op.
+            preprocess: bool, whether to map the Dataset through
+                Problem.preprocess_example.
+            dataset_split: DatasetSplit, which split to read data
+                from (TRAIN:"-train", EVAL:"-dev", "test":"-test"). Defaults to mode.
+            shard: int, if provided, will only read data from the specified shard.
+            partition_id: integer - which partition of the dataset to read from
+            num_partitions: how many partitions in the dataset
+            max_records: int, number of records to truncate to.
+            only_last: bool, whether we should include only files from last epoch.
+        Returns:
+            Dataset containing dict<feature name, Tensor>.
+        Raises:
+            ValueError: if num_partitions is greater than the number of data files.
+        """
+        is_training = mode == tf.estimator.ModeKeys.TRAIN
+        shuffle_files = shuffle_files or shuffle_files is None and is_training
+
+        dataset_split = dataset_split or mode
+        assert data_dir
+
+        if hparams is None:
+            hparams = problem.default_model_hparams()
+
+        if not hasattr(hparams, "data_dir"):
+            hparams.add_hparam("data_dir", data_dir)
+        if not hparams.data_dir:
+            hparams.data_dir = data_dir
+        # Construct the Problem's hp so that items within it are accessible
+        _ = self.get_hparams(hparams)
+
+        data_filepattern = self.filepattern(data_dir, dataset_split, shard=shard)
+        if only_last:
+            imprv_data_filepattern = data_filepattern + r"10.[\d+]"
+        else:
+            imprv_data_filepattern = data_filepattern
+        tf.logging.info("Reading data files from %s", data_filepattern)
+        try:
+            data_files = sorted(tf.contrib.slim.parallel_reader.get_data_files(
+                imprv_data_filepattern))
+        except ValueError:
+            data_files = sorted(tf.contrib.slim.parallel_reader.get_data_files(
+                data_filepattern))
+
+        # Functions used in dataset transforms below. `filenames` can be either a
+        # `tf.string` tensor or `tf.data.Dataset` containing one or more filenames.
+        def _load_records_and_preprocess(filenames):
+            """Reads files from a string tensor or a dataset of filenames."""
+            # Load records from file(s) with an 8MiB read buffer.
+            _dataset = tf.data.TFRecordDataset(filenames, buffer_size=8 * 1024 * 1024)
+            # Decode.
+            _dataset = _dataset.map(self.decode_example, num_parallel_calls=num_threads)
+            # Preprocess if requested.
+            # Note that preprocessing should happen per-file as order may matter.
+            if preprocess:
+                _dataset = self.preprocess(_dataset, mode, hparams, interleave=False)
+            return _dataset
+
+        if len(data_files) < num_partitions:
+            raise ValueError(
+                "number of data files (%d) must be at least the number of hosts (%d)"
+                % (len(data_files), num_partitions))
+        data_files = [f for (i, f) in enumerate(data_files)
+                      if i % num_partitions == partition_id]
+        tf.logging.info(
+            "partition: %d num_data_files: %d" % (partition_id, len(data_files)))
+        if shuffle_files:
+            random.shuffle(data_files)
+
+        dataset = tf.data.Dataset.from_tensor_slices(tf.constant(data_files))
+        # Create data-set from files by parsing, pre-processing and interleaving.
+        if shuffle_files:
+            dataset = dataset.apply(
+                tf.contrib.data.parallel_interleave(
+                    _load_records_and_preprocess, sloppy=True, cycle_length=8))
+        else:
+            dataset = _load_records_and_preprocess(dataset)
+
+        dataset = dataset.take(max_records)
+        if output_buffer_size:
+            dataset = dataset.prefetch(output_buffer_size)
+
+        return dataset
+
+    def input_fn(self,
+                 mode,
+                 hparams,
+                 data_dir=None,
+                 params=None,
+                 force_repeat=False,
+                 prevent_repeat=False,
+                 dataset_kwargs=None):
+        """Builds input pipeline for problem.
+        Args:
+            mode: tf.estimator.ModeKeys
+            hparams: HParams, model hp
+            data_dir: str, data directory; if None, will use hp.data_dir
+            params: dict, may include "batch_size"
+            force_repeat: bool, whether to repeat the data even if not training
+            prevent_repeat: bool, whether to not repeat when in training mode.
+                Overrides force_repeat.
+            dataset_kwargs: dict, if passed, will pass as kwargs to self.dataset
+                method when called
+        Returns:
+            (features_dict<str name, Tensor feature>, Tensor targets)
+        """
+        is_training = mode == tf.estimator.ModeKeys.TRAIN
+        num_threads = problem.cpu_count() if is_training else 1
+
+        def gpu_valid_size(example):
+            return data_utils.example_valid_size(example, hparams.min_length, hparams.max_length)
+
+        # Read and preprocess
+        data_dir = data_dir or (hasattr(hparams, "data_dir") and hparams.data_dir)
+
+        dataset_kwargs = dataset_kwargs or {}
+        dataset_kwargs.update({
+            "mode": mode,
+            "data_dir": data_dir,
+            "num_threads": num_threads,
+            "hparams": hparams
+        })
+
+        dataset = self.dataset(**dataset_kwargs)
+        if (force_repeat or is_training) and not prevent_repeat:
+            # Repeat and skip a random number of records
+            dataset = dataset.repeat()
+
+        if is_training:
+            data_files = tf.contrib.slim.parallel_reader.get_data_files(
+                self.filepattern(data_dir, mode))
+            #  In continuous_train_and_eval when switching between train and
+            #  eval, this input_fn method gets called multiple times and it
+            #  would give you the exact same samples from the last call
+            #  (because the Graph seed is set). So this skip gives you some
+            #  shuffling.
+            dataset = problem.skip_random_fraction(dataset, data_files[0])
+
+        dataset = dataset.map(
+            data_reader.cast_ints_to_int32, num_parallel_calls=num_threads)
+
+        dataset = dataset.filter(gpu_valid_size)
+
+        dataset = dataset.apply(
+            tf.contrib.data.bucket_by_sequence_length(
+                data_utils.example_length, [], [hparams.batch_size]))
+
+        def prepare_for_output(example):
+            problem._summarize_features(example, 1)
+            return example
+
+        dataset = dataset.map(prepare_for_output, num_parallel_calls=num_threads)
+        dataset = dataset.prefetch(2)
+
+        if mode == tf.estimator.ModeKeys.PREDICT:
+            # This is because of a bug in the Estimator that short-circuits prediction
+            # if it doesn't see a QueueRunner. DummyQueueRunner implements the
+            # minimal expected interface but does nothing.
+            tf.add_to_collection(tf.GraphKeys.QUEUE_RUNNERS,
+                                 data_reader.DummyQueueRunner())
+
+        return dataset
 
 
 class NumpyHandler(tf.contrib.slim.tfexample_decoder.ItemHandler):

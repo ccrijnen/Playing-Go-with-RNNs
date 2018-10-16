@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def random_augmentation(example, board_size):
+def random_augmentation(example, board_size, mode="rnn"):
     """Perform a random rotation/flip on the example.
 
     example["inputs"] needs to be of shape [game_length, 3, board_size, board_size].
@@ -21,9 +21,12 @@ def random_augmentation(example, board_size):
     Args:
         example: dict, go game
         board_size: int, board size
+        mode: only needed if the example doesnt have the dimension game_length
     Return:
         Randomly augmented example
     """
+    assert mode in ["rnn", "cnn"]
+
     flat_board = board_size * board_size
     num_moves = flat_board + 1
 
@@ -40,6 +43,9 @@ def random_augmentation(example, board_size):
     for name, array in [["inputs", inputs], ["legal_moves", legal_moves], ["p_targets", p_targets]]:
         split = name != "inputs"
         split_p = name == "p_targets"
+
+        if mode == "cnn":
+            array = tf.expand_dims(array, axis=0)
 
         if split:
             if split_p:
@@ -119,6 +125,9 @@ def random_augmentation(example, board_size):
             if split_p:
                 result = tf.argmax(result, 1)
 
+        if mode == "cnn":
+            result = tf.squeeze(result, axis=[0])
+
         example[name] = result
 
     return example
@@ -129,9 +138,10 @@ def split_exmaple_by_color(example):
     legal_moves = example["legal_moves"]
     p_targets = example["p_targets"]
     v_targets = example["v_targets"]
+    to_play = example["to_play"]
     dataset_name = example["dataset_name"]
 
-    mask_black = tf.equal(inputs[:, 2, 0, 0], 1)
+    mask_black = tf.equal(to_play, 1)
 
     game_length = tf.boolean_mask(inputs, mask_black)
     game_length = tf.shape(game_length)[0]
@@ -145,7 +155,7 @@ def split_exmaple_by_color(example):
         "dataset_name": dataset_name
     }
 
-    mask_white = tf.not_equal(inputs[:, 2, 0, 0], 1)
+    mask_white = tf.not_equal(to_play, 1)
 
     game_length = tf.boolean_mask(inputs, mask_white)
     game_length = tf.shape(game_length)[0]
@@ -162,7 +172,7 @@ def split_exmaple_by_color(example):
     return [black_example, white_example]
 
 
-def mapping(elem):
+def format_input(elem):
     position, player = elem
 
     ones = tf.ones_like(position)
@@ -188,20 +198,19 @@ def mapping(elem):
     return new_pos
 
 
-def format_test(example, board_size):
+def format_example(example, board_size):
     inputs = example["inputs"]
-    game_length = example['game_length']
 
     winner = example.pop('winner')
-    to_play = example.pop('to_play')
+    to_play = example['to_play']
     to_play = tf.cast(to_play, tf.int64)
 
-    new_inputs = tf.map_fn(mapping, (inputs, to_play), dtype=tf.int64, back_prop=False)
+    new_inputs = tf.map_fn(format_input, (inputs, to_play), dtype=tf.int8, back_prop=False)
     new_inputs = tf.reshape(new_inputs, [-1, 3, board_size, board_size])
     example["inputs"] = new_inputs
 
     def _draw():
-        return tf.zeros_like(game_length)
+        return tf.zeros_like(to_play)
 
     def _not_draw():
         is_winner = tf.ones_like(to_play)
@@ -217,63 +226,26 @@ def format_test(example, board_size):
     return example
 
 
-def format_example(example, hparams):
+def build_dataset_cnn(example):
+    game_length = example["game_length"]
+    dataset_name = example["dataset_name"]
+
     inputs = example["inputs"]
-    game_length = example['game_length']
+    legal_moves = example["legal_moves"]
+    p_targets = example["p_targets"]
+    v_targets = example["v_targets"]
 
-    winner = example.pop('winner')
-    to_play = example.pop('to_play')
-    to_play = tf.cast(to_play, tf.int64)
+    game_lengths = tf.fill([game_length], game_length)
+    dataset_names = tf.fill([game_length], dataset_name)
 
-    partitions = tf.range(hparams.max_length)
+    new_ex = {
+        "inputs": inputs,
+        "legal_moves": legal_moves,
+        "p_targets": p_targets,
+        "v_targets": v_targets,
+        "game_length": game_lengths,
+        "dataset_name": dataset_names
+    }
 
-    _inputs = tf.dynamic_partition(inputs, partitions, hparams.max_length, "unstack_inputs")
-    _to_play = tf.dynamic_partition(to_play, partitions, hparams.max_length, "unstack_to_play")
-
-    new_inputs = []
-    for position, player in zip(_inputs, _to_play):
-        if position == [] and player == []:
-            break
-        position = tf.reshape(position, [hparams.board_size, hparams.board_size])
-        player = tf.reshape(player, [])
-
-        ones = tf.ones_like(position)
-        zeros = tf.zeros_like(position)
-
-        black_mask = tf.equal(position, 1)
-        black_stones = tf.where(black_mask, ones, zeros)
-
-        white_mask = tf.equal(position, -1)
-        white_stones = tf.where(white_mask, ones, zeros)
-
-        def _black():
-            return tf.stack([black_stones, white_stones, ones], axis=0)
-
-        def _white():
-            return tf.stack([white_stones, black_stones, zeros], axis=0)
-
-        cases = [(tf.equal(player, 1), _black),
-                 (tf.equal(player, -1), _white)]
-
-        new_pos = tf.case(cases)
-
-        new_inputs.append(new_pos)
-
-    new_inputs = tf.stack(new_inputs, axis=0)
-    example["inputs"] = new_inputs
-
-    def _draw():
-        return tf.zeros_like(game_length)
-
-    def _not_draw():
-        is_winner = tf.ones_like(to_play)
-        not_winner = tf.negative(is_winner)
-        return tf.where(tf.equal(to_play, winner), is_winner, not_winner)
-
-    cases = [(tf.equal(winner, 0), _draw),
-             (tf.not_equal(winner, 0), _not_draw)]
-
-    v_targets = tf.case(cases)
-    example["v_targets"] = v_targets
-
-    return example
+    dataset = tf.data.Dataset.from_tensor_slices(new_ex)
+    return dataset
