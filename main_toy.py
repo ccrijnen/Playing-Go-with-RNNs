@@ -68,7 +68,7 @@ HPARAMS_CNN = tf.contrib.training.HParams(
     # than min_length
     min_length=50,
 
-    batch_size=256,
+    batch_size=32,
 
     num_filters=256,
     num_res_blocks=8,
