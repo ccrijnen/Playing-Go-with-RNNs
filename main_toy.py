@@ -68,6 +68,8 @@ HPARAMS_CNN = tf.contrib.training.HParams(
     # than min_length
     min_length=50,
 
+    history_length=8,
+
     batch_size=32,
 
     num_filters=256,
@@ -94,7 +96,7 @@ def set_random_seed(seed):
 
 
 def run_rnn(hp):
-    prob = go_problem_19_toy.GoProblem19Rnn()
+    prob = go_problem_19_toy.GoProblem19ToyRnn()
     hp = prob.get_hparams(hp)
 
     model = go_models_rnn.ConvLSTMModel(hp)
@@ -104,7 +106,7 @@ def run_rnn(hp):
 
 
 def run_cnn(hp):
-    prob = go_problem_19_toy.GoProblem19Cnn()
+    prob = go_problem_19_toy.GoProblem19ToyCnn()
     hp = prob.get_hparams(hp)
 
     model = go_models_cnn.AlphaZeroModel(hp)

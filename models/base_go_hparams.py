@@ -18,6 +18,10 @@ def base_go_hparams():
         # than min_length
         min_length=50,
 
+        # When using a cnn problem it will keep this amount of positions as history
+        # resulting in a history_length*2+1 x board_size x board_size input
+        history_length=8,
+
         batch_size=2,
 
         num_filters=256,

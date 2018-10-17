@@ -1,6 +1,198 @@
 import tensorflow as tf
 
 
+def format_example_rnn(example):
+    inputs = example["inputs"]
+
+    winner = example.pop('winner')
+    to_play = example['to_play']
+    to_play = tf.cast(to_play, tf.int64)
+
+    new_inputs = tf.map_fn(format_input_rnn, (inputs, to_play), dtype=tf.int8, back_prop=False)
+    example["inputs"] = new_inputs
+
+    def _draw():
+        return tf.zeros_like(to_play)
+
+    def _not_draw():
+        is_winner = tf.ones_like(to_play)
+        not_winner = tf.negative(is_winner)
+        return tf.where(tf.equal(to_play, winner), is_winner, not_winner)
+
+    cases = [(tf.equal(winner, 0), _draw),
+             (tf.not_equal(winner, 0), _not_draw)]
+
+    v_targets = tf.case(cases)
+    example["v_targets"] = v_targets
+
+    return example
+
+
+def format_input_rnn(elem):
+    position, player = elem
+
+    ones = tf.ones_like(position)
+    zeros = tf.zeros_like(position)
+
+    black_mask = tf.equal(position, 1)
+    black_stones = tf.where(black_mask, ones, zeros)
+
+    white_mask = tf.equal(position, -1)
+    white_stones = tf.where(white_mask, ones, zeros)
+
+    def _black():
+        return tf.stack([black_stones, white_stones, ones], axis=0)
+
+    def _white():
+        return tf.stack([white_stones, black_stones, zeros], axis=0)
+
+    cases = [(tf.equal(player, 1), _black),
+             (tf.equal(player, -1), _white)]
+
+    new_pos = tf.case(cases)
+
+    return new_pos
+
+
+def split_exmaple_by_color(example):
+    inputs = example["inputs"]
+    legal_moves = example["legal_moves"]
+    p_targets = example["p_targets"]
+    v_targets = example["v_targets"]
+    to_play = example["to_play"]
+    dataset_name = example["dataset_name"]
+
+    mask_black = tf.equal(to_play, 1)
+
+    game_length = tf.boolean_mask(inputs, mask_black)
+    game_length = tf.shape(game_length)[0]
+
+    black_example = {
+        "inputs": tf.boolean_mask(inputs, mask_black),
+        "legal_moves": tf.boolean_mask(legal_moves, mask_black),
+        "p_targets": tf.boolean_mask(p_targets, mask_black),
+        "v_targets": tf.boolean_mask(v_targets, mask_black),
+        "game_length": game_length,
+        "dataset_name": dataset_name
+    }
+
+    mask_white = tf.not_equal(to_play, 1)
+
+    game_length = tf.boolean_mask(inputs, mask_white)
+    game_length = tf.shape(game_length)[0]
+
+    white_example = {
+        "inputs": tf.boolean_mask(inputs, mask_white),
+        "legal_moves": tf.boolean_mask(legal_moves, mask_white),
+        "p_targets": tf.boolean_mask(p_targets, mask_white),
+        "v_targets": tf.boolean_mask(v_targets, mask_white),
+        "game_length": game_length,
+        "dataset_name": dataset_name
+    }
+    return [black_example, white_example]
+
+
+def format_example_cnn(example, hp):
+    board_size = hp.board_size
+    history_length = hp.history_length
+
+    inputs = example["inputs"]
+    to_play = example['to_play']
+
+    padded = []
+    for i in range(history_length):
+        paddings = tf.constant([[i, history_length-1-i], [0, 0], [0, 0]])
+        padded_input = tf.pad(inputs, paddings)
+        padded_input = padded_input[:-(history_length-1)]
+        padded.append(padded_input)
+    padded_inputs = tf.stack(padded, axis=1)
+
+    def format_input_cnn(elem):
+        position, player = elem
+
+        positions = tf.unstack(position, num=history_length, axis=0)
+
+        ones = tf.ones([board_size, board_size], dtype=tf.int8)
+        zeros = tf.zeros([board_size, board_size], dtype=tf.int8)
+
+        pos_black = []
+        pos_white = []
+        for pos in positions:
+            black_mask = tf.equal(pos, 1)
+            black_stones = tf.where(black_mask, ones, zeros)
+
+            white_mask = tf.equal(pos, -1)
+            white_stones = tf.where(white_mask, ones, zeros)
+
+            pos_black.extend([black_stones, white_stones])
+            pos_white.extend([white_stones, black_stones])
+
+        pos_black.append(ones)
+        pos_white.append(zeros)
+
+        def _black():
+            return tf.stack(pos_black, axis=0)
+
+        def _white():
+            return tf.stack(pos_white, axis=0)
+
+        _cases = [(tf.equal(player, 1), _black),
+                  (tf.not_equal(player, 1), _white)]
+
+        new_pos = tf.case(_cases)
+        return new_pos
+
+    new_inputs = tf.map_fn(format_input_cnn, (padded_inputs, to_play), dtype=tf.int8, back_prop=False)
+
+    length = example["game_length"]
+    new_inputs = tf.reshape(new_inputs, [length, history_length * 2 + 1, board_size, board_size])
+    example["inputs"] = new_inputs
+
+    winner = example.pop('winner')
+    to_play = tf.cast(to_play, tf.int64)
+
+    def _draw():
+        return tf.zeros_like(to_play)
+
+    def _not_draw():
+        is_winner = tf.ones_like(to_play)
+        not_winner = tf.negative(is_winner)
+        return tf.where(tf.equal(to_play, winner), is_winner, not_winner)
+
+    cases = [(tf.equal(winner, 0), _draw),
+             (tf.not_equal(winner, 0), _not_draw)]
+
+    v_targets = tf.case(cases)
+    example["v_targets"] = v_targets
+
+    return example
+
+
+def build_dataset_cnn(example):
+    game_length = example["game_length"]
+    dataset_name = example["dataset_name"]
+
+    inputs = example["inputs"]
+    legal_moves = example["legal_moves"]
+    p_targets = example["p_targets"]
+    v_targets = example["v_targets"]
+
+    game_lengths = tf.fill([game_length], game_length)
+    dataset_names = tf.fill([game_length], dataset_name)
+
+    new_ex = {
+        "inputs": inputs,
+        "legal_moves": legal_moves,
+        "p_targets": p_targets,
+        "v_targets": v_targets,
+        "game_length": game_lengths,
+        "dataset_name": dataset_names
+    }
+
+    dataset = tf.data.Dataset.from_tensor_slices(new_ex)
+    return dataset
+
+
 def random_augmentation(example, board_size, mode="rnn"):
     """Perform a random rotation/flip on the example.
 
@@ -131,121 +323,3 @@ def random_augmentation(example, board_size, mode="rnn"):
         example[name] = result
 
     return example
-
-
-def split_exmaple_by_color(example):
-    inputs = example["inputs"]
-    legal_moves = example["legal_moves"]
-    p_targets = example["p_targets"]
-    v_targets = example["v_targets"]
-    to_play = example["to_play"]
-    dataset_name = example["dataset_name"]
-
-    mask_black = tf.equal(to_play, 1)
-
-    game_length = tf.boolean_mask(inputs, mask_black)
-    game_length = tf.shape(game_length)[0]
-
-    black_example = {
-        "inputs": tf.boolean_mask(inputs, mask_black),
-        "legal_moves": tf.boolean_mask(legal_moves, mask_black),
-        "p_targets": tf.boolean_mask(p_targets, mask_black),
-        "v_targets": tf.boolean_mask(v_targets, mask_black),
-        "game_length": game_length,
-        "dataset_name": dataset_name
-    }
-
-    mask_white = tf.not_equal(to_play, 1)
-
-    game_length = tf.boolean_mask(inputs, mask_white)
-    game_length = tf.shape(game_length)[0]
-
-    white_example = {
-        "inputs": tf.boolean_mask(inputs, mask_white),
-        "legal_moves": tf.boolean_mask(legal_moves, mask_white),
-        "p_targets": tf.boolean_mask(p_targets, mask_white),
-        "v_targets": tf.boolean_mask(v_targets, mask_white),
-        "game_length": game_length,
-        "dataset_name": dataset_name
-    }
-
-    return [black_example, white_example]
-
-
-def format_input(elem):
-    position, player = elem
-
-    ones = tf.ones_like(position)
-    zeros = tf.zeros_like(position)
-
-    black_mask = tf.equal(position, 1)
-    black_stones = tf.where(black_mask, ones, zeros)
-
-    white_mask = tf.equal(position, -1)
-    white_stones = tf.where(white_mask, ones, zeros)
-
-    def _black():
-        return tf.stack([black_stones, white_stones, ones], axis=0)
-
-    def _white():
-        return tf.stack([white_stones, black_stones, zeros], axis=0)
-
-    cases = [(tf.equal(player, 1), _black),
-             (tf.equal(player, -1), _white)]
-
-    new_pos = tf.case(cases)
-
-    return new_pos
-
-
-def format_example(example, board_size):
-    inputs = example["inputs"]
-
-    winner = example.pop('winner')
-    to_play = example['to_play']
-    to_play = tf.cast(to_play, tf.int64)
-
-    new_inputs = tf.map_fn(format_input, (inputs, to_play), dtype=tf.int8, back_prop=False)
-    new_inputs = tf.reshape(new_inputs, [-1, 3, board_size, board_size])
-    example["inputs"] = new_inputs
-
-    def _draw():
-        return tf.zeros_like(to_play)
-
-    def _not_draw():
-        is_winner = tf.ones_like(to_play)
-        not_winner = tf.negative(is_winner)
-        return tf.where(tf.equal(to_play, winner), is_winner, not_winner)
-
-    cases = [(tf.equal(winner, 0), _draw),
-             (tf.not_equal(winner, 0), _not_draw)]
-
-    v_targets = tf.case(cases)
-    example["v_targets"] = v_targets
-
-    return example
-
-
-def build_dataset_cnn(example):
-    game_length = example["game_length"]
-    dataset_name = example["dataset_name"]
-
-    inputs = example["inputs"]
-    legal_moves = example["legal_moves"]
-    p_targets = example["p_targets"]
-    v_targets = example["v_targets"]
-
-    game_lengths = tf.fill([game_length], game_length)
-    dataset_names = tf.fill([game_length], dataset_name)
-
-    new_ex = {
-        "inputs": inputs,
-        "legal_moves": legal_moves,
-        "p_targets": p_targets,
-        "v_targets": v_targets,
-        "game_length": game_lengths,
-        "dataset_name": dataset_names
-    }
-
-    dataset = tf.data.Dataset.from_tensor_slices(new_ex)
-    return dataset

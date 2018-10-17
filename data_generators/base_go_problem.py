@@ -349,7 +349,10 @@ class GoProblem(problem.Problem):
         hparams.add_hparam("num_moves", self.num_moves)
 
         if hasattr(hparams, "sort_sequence_by_color"):
-            self.sort_sequence_by_color = hparams.sort_sequence_by_color
+            if self.is_recurrent:
+                self.sort_sequence_by_color = hparams.sort_sequence_by_color
+            else:
+                self.sort_sequence_by_color = False
         else:
             self.sort_sequence_by_color = False
 
@@ -368,7 +371,7 @@ class GoProblem(problem.Problem):
             raise ValueError("The Problem subclass hp function should mutate "
                              "the defaults passed in and return None.")
 
-        if hparams.sort_sequence_by_color:
+        if self.sort_sequence_by_color:
             hparams.min_length = hparams.min_length // 2
             hparams.max_length = hparams.max_length // 2
 
@@ -432,7 +435,7 @@ class GoProblem(problem.Problem):
         assert data_dir
 
         if hparams is None:
-            hparams = problem.default_model_hparams()
+            hparams = base_go_hparams()
 
         if not hasattr(hparams, "data_dir"):
             hparams.add_hparam("data_dir", data_dir)

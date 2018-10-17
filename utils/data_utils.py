@@ -11,9 +11,9 @@ from utils import sgf_utils, utils
 class DatasetStats:
     def __init__(self, problem, hparams):
         # set random seed to make sure shuffle is re-creatable
+        self.problem = problem
         self.hparams = hparams
         self.sort_sequence_by_color = problem.sort_sequence_by_color
-        self.files = problem.generate_dataset(hparams.tmp_dir, False)
         self.suffix = "_{}".format(problem.board_size)
 
         if problem.use_gogod_data and problem.use_kgs_data:
@@ -109,9 +109,10 @@ class DatasetStats:
         if hasattr(self, 'sizes'):
             return self.sizes
 
+        files = self.problem.generate_dataset(self.hparams.tmp_dir, False)
         self.lengths = {}
 
-        for split, datasets in self.files.items():
+        for split, datasets in files.items():
             game_lengths = []
 
             for _, filenames in datasets:

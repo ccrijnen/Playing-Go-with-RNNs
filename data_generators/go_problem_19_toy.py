@@ -51,13 +51,13 @@ class GoProblem19Toy(base_go_problem.GoProblem):
         return data
 
 
-class GoProblem19Rnn(GoProblem19Toy):
+class GoProblem19ToyRnn(GoProblem19Toy):
     @property
     def is_recurrent(self):
         return True
 
     def preprocess_example(self, example, mode, hparams):
-        example = go_preprocessing.format_example(example, self.board_size)
+        example = go_preprocessing.format_example_rnn(example)
 
         example["inputs"].set_shape([None, 3, self.board_size, self.board_size])
         example["legal_moves"].set_shape([None, self.num_moves])
@@ -90,14 +90,17 @@ class GoProblem19Rnn(GoProblem19Toy):
             return example
 
 
-class GoProblem19Cnn(GoProblem19Toy):
+class GoProblem19ToyCnn(GoProblem19Toy):
     @property
     def is_recurrent(self):
         return False
 
     def preprocess_example(self, example, mode, hparams):
-        example = go_preprocessing.format_example(example, self.board_size)
+        example = go_preprocessing.format_example_cnn(example, hparams)
         example.pop("to_play")
+
+        example["inputs"].set_shape([None, hparams.history_length * 2 + 1, self.board_size, self.board_size])
+        example["legal_moves"].set_shape([None, self.num_moves])
 
         example["inputs"] = tf.cast(example["inputs"], tf.float32)
         example["legal_moves"] = tf.cast(example["legal_moves"], tf.float32)
@@ -109,7 +112,6 @@ class GoProblem19Cnn(GoProblem19Toy):
             def _augment(ex):
                 ex = go_preprocessing.random_augmentation(ex, self.board_size, "cnn")
                 return ex
-
             dataset = dataset.map(_augment)
 
         return dataset
