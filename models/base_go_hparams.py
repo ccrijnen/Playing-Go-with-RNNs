@@ -3,8 +3,8 @@ import tensorflow as tf
 
 def base_go_hparams():
     return tf.contrib.training.HParams(
-        data_dir=".\\data",
-        tmp_dir=".\\data\\tmp\\",
+        data_dir="./data",
+        tmp_dir="./data/tmp/",
 
         use_gogod_data=True,
         use_kgs_data=True,

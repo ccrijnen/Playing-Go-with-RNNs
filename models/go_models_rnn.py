@@ -75,6 +75,19 @@ class GoModelRNN(GoModel):
 
         return [p_loss, v_loss, l2_loss], [p_losses, v_losses]
 
+    def policy_accuracy(self, features, predictions):
+        with tf.variable_scope('policy_accuracy'):
+            p_targets = features["p_targets"]
+            game_lengths = features["game_length"]
+
+            mask = tf.sequence_mask(game_lengths)
+
+            p_correct = tf.equal(p_targets, predictions)
+            p_correct = tf.boolean_mask(p_correct, mask)
+
+            p_acc = tf.reduce_mean(tf.cast(p_correct, tf.float32))
+            return p_acc
+
 
 class ConvLSTMModel(GoModelRNN):
     def rnn_cell(self, board_size):

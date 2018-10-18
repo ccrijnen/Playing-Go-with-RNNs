@@ -144,8 +144,6 @@ def format_example_cnn(example, hp):
 
     new_inputs = tf.map_fn(format_input_cnn, (padded_inputs, to_play), dtype=tf.int8, back_prop=False)
 
-    length = example["game_length"]
-    new_inputs = tf.reshape(new_inputs, [length, history_length * 2 + 1, board_size, board_size])
     example["inputs"] = new_inputs
 
     winner = example.pop('winner')

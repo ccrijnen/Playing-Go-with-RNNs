@@ -89,6 +89,9 @@ class GoModel(object):
     def loss(self, logits, features):
         raise NotImplementedError("Abstract Method")
 
+    def policy_accuracy(self, features, predictions):
+        raise NotImplementedError("Abstract Method")
+
     def model_fn(self, features, mode):
         self.set_mode(mode)
         hp = self._hparams
@@ -124,10 +127,8 @@ class GoModel(object):
 
             loss = p_loss + hp.value_loss_weight * v_loss + l2_loss
 
-        with tf.variable_scope('policy_accuracy'):
-            p_targets = transformed_features["p_targets"]
-            p_correct = tf.equal(p_targets, tf.argmax(p_preds, -1, output_type=tf.int32))
-            p_acc = tf.reduce_mean(tf.cast(p_correct, tf.float32))
+        p_targets = features["p_targets"]
+        p_acc = self.policy_accuracy(transformed_features, p_preds_idx)
 
         if is_training:
             with tf.variable_scope('train_ops'):

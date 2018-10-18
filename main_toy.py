@@ -17,9 +17,9 @@ parser.add_argument('--mode',
 
 
 HPARAMS_RNN = tf.contrib.training.HParams(
-    data_dir=".\\data",
-    tmp_dir=".\\data\\tmp\\",
-    experiment_dir=".\\experiments\\toy_problem\\",
+    data_dir="./data/",
+    tmp_dir="./data/tmp/",
+    experiment_dir="./experiments/toy_problem/",
 
     use_gogod_data=True,
     use_kgs_data=True,
@@ -52,9 +52,9 @@ HPARAMS_RNN = tf.contrib.training.HParams(
 )
 
 HPARAMS_CNN = tf.contrib.training.HParams(
-    data_dir=".\\data",
-    tmp_dir=".\\data\\tmp\\",
-    experiment_dir=".\\experiments\\toy_problem\\",
+    data_dir="./data/",
+    tmp_dir="./data/tmp/",
+    experiment_dir="./experiments/toy_problem/",
 
     use_gogod_data=True,
     use_kgs_data=True,
@@ -70,7 +70,7 @@ HPARAMS_CNN = tf.contrib.training.HParams(
 
     history_length=8,
 
-    batch_size=32,
+    batch_size=8,
 
     num_filters=256,
     num_res_blocks=8,

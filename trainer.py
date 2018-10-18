@@ -1,5 +1,4 @@
 import tensorflow as tf
-import numpy as np
 import os
 
 from utils import utils
@@ -42,25 +41,28 @@ class GoTrainer:
 
         # Use tqdm for progress bar
         t = trange(num_steps)
-        for i in t:
-            # Evaluate summaries for tensorboard only once in a while
-            if i % hp.save_summary_steps == 0:
-                # Perform a mini-batch update
-                _, _, loss_val, summaries, global_step_val = sess.run([train_op, update_metrics, loss,
-                                                                       summary_op, global_step])
-                # Write summaries for tensorboard
-                writer.add_summary(summaries, global_step_val)
-            else:
-                _, _, loss_val = sess.run([train_op, update_metrics, loss])
-            # Log the loss in the tqdm progress bar
-            t.set_postfix(loss='{:05.3f}'.format(loss_val))
+        try:
+            for i in t:
+                # Evaluate summaries for tensorboard only once in a while
+                if i % hp.save_summary_steps == 0:
+                    # Perform a mini-batch update
+                    _, _, loss_val, summaries, global_step_val = sess.run([train_op, update_metrics, loss,
+                                                                           summary_op, global_step])
+                    # Write summaries for tensorboard
+                    writer.add_summary(summaries, global_step_val)
+                else:
+                    _, _, loss_val = sess.run([train_op, update_metrics, loss])
+                # Log the loss in the tqdm progress bar
+                t.set_postfix(loss='{:05.3f}'.format(loss_val))
+        except tf.errors.OutOfRangeError:
+            pass
 
         metrics_values = {k: v[0] for k, v in metrics.items()}
         metrics_val = sess.run(metrics_values)
         metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_val.items())
         tf.logging.info("- Train metrics: " + metrics_string)
 
-    def evaluate_epoch(self, sess, model_spec, num_steps, writer=None):
+    def evaluate_epoch(self, sess, model_spec, num_steps, writer=None, reset=True):
         """Train the model on `num_steps` batches.
         Args:
             sess: (tf.Session) current session
@@ -76,11 +78,15 @@ class GoTrainer:
 
         # Load the evaluation dataset into the pipeline and initialize the metrics init op
         sess.run(model_spec['iterator_init_op'])
-        sess.run(model_spec['metrics_init_op'])
+        if reset:
+            sess.run(model_spec['metrics_init_op'])
 
         # compute metrics over the dataset
-        for _ in range(num_steps):
-            sess.run(update_metrics)
+        try:
+            for _ in range(num_steps):
+                sess.run(update_metrics)
+        except tf.errors.OutOfRangeError:
+            pass
 
         # Get the values of the metrics
         metrics_values = {k: v[0] for k, v in eval_metrics.items()}
@@ -134,8 +140,10 @@ class GoTrainer:
             train_writer = tf.summary.FileWriter(os.path.join(experiment_dir, 'train_summaries'), sess.graph)
             eval_writers = tf.summary.FileWriter(os.path.join(experiment_dir, 'eval_summaries'), sess.graph)
 
+            tf.gfile.MakeDirs(os.path.join(experiment_dir, 'last_weights'))
+            tf.gfile.MakeDirs(os.path.join(experiment_dir, 'best_weights'))
+
             best_eval_p_acc = 0.0
-            best_eval_v_loss = np.inf
             for epoch in range(begin_at_epoch, begin_at_epoch + hp.num_epochs):
                 # Run one epoch
                 tf.logging.info("Epoch {}/{}".format(epoch + 1, begin_at_epoch + hp.num_epochs))
@@ -154,30 +162,32 @@ class GoTrainer:
                     split_eval_steps = [total_eval_steps]
 
                 for i, (t_steps, e_steps) in enumerate(zip(split_train_steps, split_eval_steps)):
+                    reset = False
+                    if i is 0:
+                        reset = True
+
                     tf.logging.info("Sub epoch {}/{} with {} train steps"
-                                    .format(i + 1, len(split_train_steps), hp.eval_every))
+                                    .format(i + 1, len(split_train_steps), t_steps))
                     self.train_epoch(sess, train_model_spec, t_steps, train_writer)
 
                     # Save weights
-                    last_save_path = os.path.join(experiment_dir, 'last_weights', 'after-epoch')
-                    tf.gfile.MakeDirs(os.path.join(experiment_dir, 'last_weights'))
-                    last_saver.save(sess, last_save_path, global_step=epoch + 1)
+                    last_save_path = os.path.join(experiment_dir, 'last_weights',
+                                                  'after-epoch-{}'.format(epoch + 1))
+                    last_saver.save(sess, last_save_path, global_step=i + 1)
 
                     # Evaluate for one sub epoch on validation set
-                    metrics = self.evaluate_epoch(sess, eval_model_spec, e_steps, eval_writers)
+                    metrics = self.evaluate_epoch(sess, eval_model_spec, e_steps, eval_writers, reset)
 
                     # If best_eval, best_save_path
                     eval_p_acc = metrics['policy_accuracy']
-                    eval_v_loss = metrics['value_loss']
-                    if eval_p_acc >= best_eval_p_acc and eval_v_loss <= best_eval_v_loss:
+                    if eval_p_acc >= best_eval_p_acc:
                         # Store new best accuracy
                         best_eval_p_acc = eval_p_acc
-                        best_eval_v_loss = eval_v_loss
                         # Save weights
-                        best_save_path = os.path.join(experiment_dir, 'best_weights', 'after-epoch')
-                        tf.gfile.MakeDirs(os.path.join(experiment_dir, 'best_weights'))
-                        best_save_path = best_saver.save(sess, best_save_path, global_step=epoch + 1)
-                        tf.logging.info("- Found new best accuracy, saving in {}".format(best_save_path))
+                        best_save_path = os.path.join(experiment_dir, 'best_weights',
+                                                      'after-epoch-{}'.format(epoch + 1))
+                        best_save_path = best_saver.save(sess, best_save_path, global_step=i + 1)
+                        tf.logging.info("- Found new best policy accuracy, saving in {}".format(best_save_path))
                         # Save best eval metrics in a json file in the model directory
                         best_json_path = os.path.join(experiment_dir, "metrics_eval_best_weights.json")
                         utils.save_dict_to_json(metrics, best_json_path)
