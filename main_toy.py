@@ -7,86 +7,13 @@ import numpy as np
 
 import trainer
 from data_generators import go_problem_19_toy
-from models import go_models_rnn, go_models_cnn
+from models import go_models_rnn, go_models_cnn, go_hparams
 from utils import utils
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--mode',
+parser.add_argument('--mode', type=str,
                     help="Mode of the model to run; must be either cnn or rnn!", required=True)
-
-
-HPARAMS_RNN = tf.contrib.training.HParams(
-    data_dir="./data/",
-    tmp_dir="./data/tmp/",
-    experiment_dir="./experiments/toy_problem/",
-
-    use_gogod_data=True,
-    use_kgs_data=True,
-
-    # If this is True and the problem is recurrent it will split the game
-    # sequence into two sequences, one for all black moves and one for all
-    # white moves
-    sort_sequence_by_color=True,
-
-    # During training, we drop sequences whose inputs and targets are shorter
-    # than min_length
-    min_length=50,
-
-    batch_size=2,
-
-    num_filters=256,
-    num_res_blocks=8,
-
-    reg_strength=1e-4,
-    value_loss_weight=0.01,
-
-    sgd_momentum=0.9,
-
-    lr_boundaries=[200000, 400000, 600000, 700000],
-    lr_rates=[1e-1, 1e-2, 1e-3, 1e-4, 1e-5],
-
-    num_epochs=1,
-    eval_every=1000,
-    save_summary_steps=1000,
-)
-
-HPARAMS_CNN = tf.contrib.training.HParams(
-    data_dir="./data/",
-    tmp_dir="./data/tmp/",
-    experiment_dir="./experiments/toy_problem/",
-
-    use_gogod_data=True,
-    use_kgs_data=True,
-
-    # If this is True and the problem is recurrent it will split the game
-    # sequence into two sequences, one for all black moves and one for all
-    # white moves
-    sort_sequence_by_color=False,
-
-    # During training, we drop sequences whose inputs and targets are shorter
-    # than min_length
-    min_length=50,
-
-    history_length=8,
-
-    batch_size=8,
-
-    num_filters=256,
-    num_res_blocks=8,
-
-    reg_strength=1e-4,
-    value_loss_weight=0.01,
-
-    sgd_momentum=0.9,
-
-    lr_boundaries=[200000, 400000, 600000, 700000],
-    lr_rates=[1e-1, 1e-2, 1e-3, 1e-4, 1e-5],
-
-    num_epochs=1,
-    eval_every=1000,
-    save_summary_steps=1000,
-)
 
 
 def set_random_seed(seed):
@@ -104,6 +31,8 @@ def run_rnn(hp):
     my_trainer = trainer.GoTrainer(prob, model, hp)
     my_trainer.train_and_evaluate()
 
+    my_trainer.test('best_weights')
+
 
 def run_cnn(hp):
     prob = go_problem_19_toy.GoProblem19ToyCnn()
@@ -114,30 +43,34 @@ def run_cnn(hp):
     my_trainer = trainer.GoTrainer(prob, model, hp)
     my_trainer.train_and_evaluate()
 
+    my_trainer.test('best_weights')
+
 
 def main():
     args = parser.parse_args()
     mode = args.mode
     assert mode in ["rnn", "cnn"]
 
+    experiment_dir = "./experiments/toy_problem/"
+
     set_random_seed(230)
 
     if mode == "rnn":
-        hp = HPARAMS_RNN
-        path = os.path.join(hp.experiment_dir, "rnn")
+        hp = go_hparams.go_params_19_rnn_sorted()
+        path = os.path.join(experiment_dir, "rnn")
         tf.gfile.MakeDirs(path)
         hp.experiment_dir = path
 
-        utils.set_logger(os.path.join(hp.experiment_dir, 'train.log'))
+        utils.set_logger(os.path.join(path, 'train.log'))
 
         run_rnn(hp)
     elif mode == "cnn":
-        hp = HPARAMS_CNN
-        path = os.path.join(hp.experiment_dir, "cnn")
+        hp = go_hparams.go_params_19_cnn()
+        path = os.path.join(experiment_dir, "cnn")
         tf.gfile.MakeDirs(path)
         hp.experiment_dir = path
 
-        utils.set_logger(os.path.join(hp.experiment_dir, 'train.log'))
+        utils.set_logger(os.path.join(path, 'train.log'))
 
         run_cnn(hp)
 

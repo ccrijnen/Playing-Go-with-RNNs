@@ -10,7 +10,7 @@ from tensor2tensor.data_generators import generator_utils
 from tensor2tensor.data_generators import problem
 from tensor2tensor.utils import data_reader
 
-from models.base_go_hparams import base_go_hparams
+from models.go_hparams import base_go_hparams
 from utils import data_utils, sgf_utils
 
 _GOGOD_ZIP_NAME = 'GoGoDSpring2018.zip'

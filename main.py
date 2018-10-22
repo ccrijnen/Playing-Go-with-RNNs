@@ -6,15 +6,15 @@ import tensorflow as tf
 import numpy as np
 
 import trainer
-from models.base_go_hparams import base_go_hparams
+from models import go_hparams
 from data_generators import go_problem_19
 from models import go_models_rnn, go_models_cnn
 from utils import utils
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--experiment_dir',
-                    help="Directory to save summaries and log to", required=True)
-parser.add_argument('--restore_dir', default=None,
+parser.add_argument('--experiment_dir', type=str, required=True,
+                    help="Directory to save summaries and log to")
+parser.add_argument('--restore_dir',  type=str, default='best_weights',
                     help="Optional, directory containing weights to reload before training")
 
 
@@ -36,25 +36,26 @@ def main():
     # overwritting = model_dir_has_best_weights and args.restore_dir is None
     # assert not overwritting, "Weights found in model_dir, aborting to avoid overwrite"
 
-    hp = base_go_hparams()
+    hp = go_hparams.go_params_19_cnn()
     hp.add_hparam("experiment_dir", args.experiment_dir)
 
     utils.set_logger(os.path.join(args.experiment_dir, 'train.log'))
 
-    prob = go_problem_19.GoProblem19Rnn()
-    # prob = go_problem_19.GoProblem19Cnn()
-
-    # tf.logging.info("Creating the datasets...")
-    # prob.generate_data(hp.data_dir, hp.tmp_dir)
-    # tf.logging.info("- done")
-
+    # prob = go_problem_19.GoProblem19Rnn()
+    prob = go_problem_19.GoProblem19Cnn()
     hp = prob.get_hparams(hp)
 
-    model = go_models_rnn.ConvLSTMModel(hp)
-    # model = go_models_cnn.AlphaZeroModel(hp)
+    tf.logging.info("Creating the datasets...")
+    prob.generate_data(hp.data_dir, hp.tmp_dir)
+    tf.logging.info("- done")
+
+    # model = go_models_rnn.ConvLSTMModel(hp)
+    model = go_models_cnn.AlphaZeroModel(hp)
 
     my_trainer = trainer.GoTrainer(prob, model, hp)
     my_trainer.train_and_evaluate()
+
+    my_trainer.test(args.restore_dir)
 
 
 if __name__ == '__main__':

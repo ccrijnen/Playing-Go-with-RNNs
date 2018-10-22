@@ -17,13 +17,14 @@ class GoTrainer:
         self.problem = problem
         self.model = model
 
-    def train_epoch(self, sess, model_spec, num_steps, writer):
+    def train_epoch(self, sess, model_spec, num_steps, writer, reset=True):
         """Train the model on `num_steps` batches
         Args:
             sess: (tf.Session) current session
             model_spec: (dict) contains the graph operations or nodes needed for training
             num_steps: (int) train for this number of batches
             writer: (tf.summary.FileWriter) writer for summaries
+            reset: (bool) reset metrics
         """
         hp = self.hp
 
@@ -37,10 +38,12 @@ class GoTrainer:
 
         # Load the training dataset into the pipeline and initialize the metrics local variables
         sess.run(model_spec['iterator_init_op'])
-        sess.run(model_spec['metrics_init_op'])
+        if reset:
+            sess.run(model_spec['metrics_init_op'])
 
         # Use tqdm for progress bar
         t = trange(num_steps)
+        # t = range(num_steps)
         try:
             for i in t:
                 # Evaluate summaries for tensorboard only once in a while
@@ -59,8 +62,8 @@ class GoTrainer:
 
         metrics_values = {k: v[0] for k, v in metrics.items()}
         metrics_val = sess.run(metrics_values)
-        metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_val.items())
-        tf.logging.info("- Train metrics: " + metrics_string)
+
+        return metrics_val
 
     def evaluate_epoch(self, sess, model_spec, num_steps, writer=None, reset=True):
         """Train the model on `num_steps` batches.
@@ -69,6 +72,7 @@ class GoTrainer:
             model_spec: (dict) contains the graph operations or nodes needed for training
             num_steps: (int) train for this number of batches
             writer: (tf.summary.FileWriter) writer for summaries. Is None if we don't log anything
+            reset: (bool) reset metrics
         """
         hp = self.hp
 
@@ -91,8 +95,6 @@ class GoTrainer:
         # Get the values of the metrics
         metrics_values = {k: v[0] for k, v in eval_metrics.items()}
         metrics_val = sess.run(metrics_values)
-        metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_val.items())
-        tf.logging.info("- Eval metrics: " + metrics_string)
 
         # Add summaries manually to writer at global_step_val
         if writer is not None:
@@ -102,6 +104,11 @@ class GoTrainer:
                 writer.add_summary(summ, global_step_val)
 
         return metrics_val
+
+    @staticmethod
+    def metrics_string(metrics_val):
+        metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_val.items())
+        return metrics_string
 
     def train_and_evaluate(self, restore_from=None):
         """Train the model and evaluate every epoch.
@@ -146,7 +153,6 @@ class GoTrainer:
             best_eval_p_acc = 0.0
             for epoch in range(begin_at_epoch, begin_at_epoch + hp.num_epochs):
                 # Run one epoch
-                tf.logging.info("Epoch {}/{}".format(epoch + 1, begin_at_epoch + hp.num_epochs))
                 # Compute number of batches in one epoch (one full pass over the training set)
                 total_train_steps = (hp.train_size + hp.batch_size - 1) // hp.batch_size
                 mod = total_train_steps % hp.eval_every
@@ -166,9 +172,11 @@ class GoTrainer:
                     if i is 0:
                         reset = True
 
-                    tf.logging.info("Sub epoch {}/{} with {} train steps"
-                                    .format(i + 1, len(split_train_steps), t_steps))
-                    self.train_epoch(sess, train_model_spec, t_steps, train_writer)
+                    tf.logging.info("Epoch {} - {}/{} with {} train steps"
+                                    .format(epoch + 1, i + 1, len(split_train_steps), t_steps))
+                    train_metrics = self.train_epoch(sess, train_model_spec, t_steps, train_writer, reset)
+                    train_metrics_string = self.metrics_string(train_metrics)
+                    tf.logging.info("- Train metrics: " + train_metrics_string)
 
                     # Save weights
                     last_save_path = os.path.join(experiment_dir, 'last_weights',
@@ -176,10 +184,12 @@ class GoTrainer:
                     last_saver.save(sess, last_save_path, global_step=i + 1)
 
                     # Evaluate for one sub epoch on validation set
-                    metrics = self.evaluate_epoch(sess, eval_model_spec, e_steps, eval_writers, reset)
+                    eval_metrics = self.evaluate_epoch(sess, eval_model_spec, e_steps, eval_writers, reset)
+                    eval_metrics_string = self.metrics_string(eval_metrics)
+                    tf.logging.info("- Eval metrics: " + eval_metrics_string)
 
                     # If best_eval, best_save_path
-                    eval_p_acc = metrics['policy_accuracy']
+                    eval_p_acc = eval_metrics['policy_accuracy']
                     if eval_p_acc >= best_eval_p_acc:
                         # Store new best accuracy
                         best_eval_p_acc = eval_p_acc
@@ -190,11 +200,15 @@ class GoTrainer:
                         tf.logging.info("- Found new best policy accuracy, saving in {}".format(best_save_path))
                         # Save best eval metrics in a json file in the model directory
                         best_json_path = os.path.join(experiment_dir, "metrics_eval_best_weights.json")
-                        utils.save_dict_to_json(metrics, best_json_path)
+                        utils.save_dict_to_json(eval_metrics, best_json_path)
 
                     # Save latest eval metrics in a json file in the model directory
                     last_json_path = os.path.join(experiment_dir, "metrics_eval_last_weights.json")
-                    utils.save_dict_to_json(metrics, last_json_path)
+                    utils.save_dict_to_json(eval_metrics, last_json_path)
+
+                tf.logging.info("Epoch {}/{}".format(epoch + 1, begin_at_epoch + hp.num_epochs))
+                tf.logging.info("- Train metrics: " + train_metrics_string)
+                tf.logging.info("- Eval metrics: " + eval_metrics_string)
 
     def test(self, restore_from):
         """Test the model
@@ -223,6 +237,10 @@ class GoTrainer:
             # Evaluate
             num_steps = (hp.test_size + hp.batch_size - 1) // hp.batch_size
             metrics = self.evaluate_epoch(sess, model_spec, num_steps)
+
+            metrics_string = self.metrics_string(metrics)
+            tf.logging.info("- Test metrics: " + metrics_string)
+
             metrics_name = '_'.join(restore_from.split('/'))
             save_path = os.path.join(experiment_dir, "metrics_test_{}.json".format(metrics_name))
             utils.save_dict_to_json(metrics, save_path)
