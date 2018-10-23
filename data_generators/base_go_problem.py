@@ -56,8 +56,6 @@ def maybe_unzip_kgs(tmp_dir):
     zipped_files = tf.gfile.Glob(tmp_dir + _KGS_ZIP_NAMES_GLOB)
     for file in zipped_files:
         path, file = os.path.split(file)
-        print(path)
-        print(file)
 
         tf.logging.info("Extracting KGS zip '{}' in '{}' to '{}'".format(file, tmp_dir, out_dir))
 
