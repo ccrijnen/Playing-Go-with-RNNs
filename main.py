@@ -32,9 +32,9 @@ def main():
 
     # Check that we are not overwriting some previous experiment
     # Comment these lines if you are developing your model and don't care about overwritting
-    # model_dir_has_best_weights = os.path.isdir(os.path.join(args.experiment_dir, "best_weights"))
-    # overwritting = model_dir_has_best_weights and args.restore_dir is None
-    # assert not overwritting, "Weights found in model_dir, aborting to avoid overwrite"
+    model_dir_has_best_weights = os.path.isdir(os.path.join(args.experiment_dir, "best_weights"))
+    overwritting = model_dir_has_best_weights and args.restore_dir is None
+    assert not overwritting, "Weights found in model_dir, aborting to avoid overwrite"
 
     hp = go_hparams.go_params_19_cnn()
     hp.add_hparam("experiment_dir", args.experiment_dir)

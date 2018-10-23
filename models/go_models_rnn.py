@@ -101,6 +101,7 @@ class ConvLSTMModel(GoModelRNN):
         hp = self.hparams
         board_size = hp.board_size
 
+        game_length = features["game_length"]
         inputs = features["inputs"]
         inputs = tf.reshape(inputs, [-1, 3, board_size, board_size])
 
@@ -116,6 +117,7 @@ class ConvLSTMModel(GoModelRNN):
             rnn_in = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
             rnn_in = tf.transpose(rnn_in,  perm=[0, 1, 3, 4, 2])
 
-            rnn_outputs, _ = tf.nn.dynamic_rnn(cell, rnn_in, time_major=False, dtype=tf.float32)
+            rnn_outputs, _ = tf.nn.dynamic_rnn(cell, rnn_in, sequence_length=game_length,
+                                               time_major=False, dtype=tf.float32)
             rnn_outputs = tf.transpose(rnn_outputs, perm=[0, 1, 4, 2, 3])
         return rnn_outputs
