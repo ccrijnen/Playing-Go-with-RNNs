@@ -43,11 +43,12 @@ def main():
 
     # prob = go_problem_19.GoProblem19Rnn()
     prob = go_problem_19.GoProblem19Cnn()
-    hp = prob.get_hparams(hp)
 
     tf.logging.info("Creating the datasets...")
     prob.generate_data(hp.data_dir, hp.tmp_dir)
     tf.logging.info("- done")
+
+    hp = prob.get_hparams(hp)
 
     # model = go_models_rnn.ConvLSTMModel(hp)
     model = go_models_cnn.AlphaZeroModel(hp)
