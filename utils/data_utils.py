@@ -109,7 +109,7 @@ class DatasetStats:
         if hasattr(self, 'sizes'):
             return self.sizes
 
-        files = self.problem.generate_dataset(self.hparams.tmp_dir, False)
+        files = self.problem.generate_dataset(self.hparams.tmp_dir)
         self.lengths = {}
 
         for split, datasets in files.items():
