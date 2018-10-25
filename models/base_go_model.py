@@ -125,7 +125,7 @@ class GoModel(object):
 
             p_loss, v_loss, l2_loss = loss_list
 
-            loss = p_loss + hp.value_loss_weight * v_loss + l2_loss
+            loss = hp.value_loss_weight * v_loss + p_loss + hp.reg_strength * l2_loss
 
         p_targets = features["p_targets"]
         p_acc = self.policy_accuracy(transformed_features, p_preds_idx)
@@ -177,10 +177,10 @@ class GoModel(object):
 
         # Summaries for training
         tf.summary.scalar('policy_accuracy', p_acc)
+        tf.summary.scalar('loss', loss)
         tf.summary.scalar('policy_loss', p_loss)
         tf.summary.scalar('value_loss', v_loss)
         tf.summary.scalar('l2_loss', l2_loss)
-        tf.summary.scalar('loss', loss)
 
         # -----------------------------------------------------------
         # MODEL SPECIFICATION

@@ -468,7 +468,7 @@ class GoProblem(problem.Problem):
             # Preprocess if requested.
             # Note that preprocessing should happen per-file as order may matter.
             if preprocess:
-                _dataset = self.preprocess(_dataset, mode, hparams, interleave=False)
+                _dataset = self.preprocess(_dataset, mode, hparams, interleave=shuffle_files)
             return _dataset
 
         if len(data_files) < num_partitions:
@@ -540,16 +540,6 @@ class GoProblem(problem.Problem):
         if (force_repeat or is_training) and not prevent_repeat:
             # Repeat and skip a random number of records
             dataset = dataset.repeat()
-
-        if is_training:
-            data_files = tf.contrib.slim.parallel_reader.get_data_files(
-                self.filepattern(data_dir, mode))
-            #  In continuous_train_and_eval when switching between train and
-            #  eval, this input_fn method gets called multiple times and it
-            #  would give you the exact same samples from the last call
-            #  (because the Graph seed is set). So this skip gives you some
-            #  shuffling.
-            dataset = problem.skip_random_fraction(dataset, data_files[0])
 
         dataset = dataset.map(
             data_reader.cast_ints_to_int32, num_parallel_calls=num_threads)

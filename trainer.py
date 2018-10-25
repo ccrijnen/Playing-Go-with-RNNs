@@ -17,14 +17,13 @@ class GoTrainer:
         self.problem = problem
         self.model = model
 
-    def train_epoch(self, sess, model_spec, num_steps, writer, reset=True):
+    def train_epoch(self, sess, model_spec, num_steps, writer):
         """Train the model on `num_steps` batches
         Args:
             sess: (tf.Session) current session
             model_spec: (dict) contains the graph operations or nodes needed for training
             num_steps: (int) train for this number of batches
             writer: (tf.summary.FileWriter) writer for summaries
-            reset: (bool) reset metrics
         """
         hp = self.hp
 
@@ -38,8 +37,7 @@ class GoTrainer:
 
         # Load the training dataset into the pipeline and initialize the metrics local variables
         sess.run(model_spec['iterator_init_op'])
-        if reset:
-            sess.run(model_spec['metrics_init_op'])
+        sess.run(model_spec['metrics_init_op'])
 
         # Use tqdm for progress bar
         t = trange(num_steps)
@@ -65,14 +63,13 @@ class GoTrainer:
 
         return metrics_val
 
-    def evaluate_epoch(self, sess, model_spec, num_steps, writer=None, reset=True):
+    def evaluate_epoch(self, sess, model_spec, num_steps, writer=None):
         """Train the model on `num_steps` batches.
         Args:
             sess: (tf.Session) current session
             model_spec: (dict) contains the graph operations or nodes needed for training
             num_steps: (int) train for this number of batches
             writer: (tf.summary.FileWriter) writer for summaries. Is None if we don't log anything
-            reset: (bool) reset metrics
         """
         hp = self.hp
 
@@ -82,8 +79,7 @@ class GoTrainer:
 
         # Load the evaluation dataset into the pipeline and initialize the metrics init op
         sess.run(model_spec['iterator_init_op'])
-        if reset:
-            sess.run(model_spec['metrics_init_op'])
+        sess.run(model_spec['metrics_init_op'])
 
         # compute metrics over the dataset
         try:
@@ -169,13 +165,9 @@ class GoTrainer:
                     split_eval_steps = [total_eval_steps]
 
                 for i, (t_steps, e_steps) in enumerate(zip(split_train_steps, split_eval_steps)):
-                    reset = False
-                    if i is 0:
-                        reset = True
-
                     tf.logging.info("Epoch {} - {}/{} with {} train steps"
                                     .format(epoch + 1, i + 1, len(split_train_steps), t_steps))
-                    train_metrics = self.train_epoch(sess, train_model_spec, t_steps, train_writer, True)
+                    train_metrics = self.train_epoch(sess, train_model_spec, t_steps, train_writer)
                     loss_string, acc_string = self.metrics_string(train_metrics)
                     tf.logging.info("- Train metrics: " + acc_string)
                     tf.logging.info("- Train metrics: " + loss_string)
@@ -186,7 +178,7 @@ class GoTrainer:
                     last_saver.save(sess, last_save_path, global_step=i + 1)
 
                     # Evaluate for one sub epoch on validation set
-                    eval_metrics = self.evaluate_epoch(sess, eval_model_spec, e_steps, eval_writers, True)
+                    eval_metrics = self.evaluate_epoch(sess, eval_model_spec, e_steps, eval_writers)
                     loss_string, acc_string = self.metrics_string(eval_metrics)
                     tf.logging.info("- Eval metrics: " + acc_string)
                     tf.logging.info("- Eval metrics: " + loss_string)

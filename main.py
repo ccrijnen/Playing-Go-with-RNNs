@@ -55,6 +55,7 @@ def main():
     my_trainer = trainer.GoTrainer(prob, model, hp)
     my_trainer.train_and_evaluate()
 
+    utils.set_logger(os.path.join(args.experiment_dir, 'test.log'))
     my_trainer.test(args.restore_dir)
 
 

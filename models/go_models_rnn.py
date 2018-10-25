@@ -49,8 +49,6 @@ class GoModelRNN(GoModel):
         return p_logits, v_output
 
     def loss(self, logits, features):
-        hp = self._hparams
-
         game_lengths = features["game_length"]
         mask = tf.sequence_mask(game_lengths)
 
@@ -58,20 +56,21 @@ class GoModelRNN(GoModel):
 
         with tf.variable_scope('policy_loss'):
             p_targets = features["p_targets"]
-            p_losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=p_logits, labels=p_targets)
+            p_losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=p_logits,
+                                                                      labels=tf.stop_gradient(p_targets))
             p_losses = tf.boolean_mask(p_losses, mask)
             p_loss = tf.reduce_mean(p_losses)
 
         with tf.variable_scope('value_loss'):
             v_targets = features['v_targets']
-            v_losses = tf.square(v_output - v_targets)
+            v_losses = tf.square(v_targets - v_output)
             v_losses = tf.boolean_mask(v_losses, mask)
             v_loss = tf.reduce_mean(v_losses)
 
         with tf.variable_scope('l2_loss'):
             reg_vars = [v for v in tf.trainable_variables()
                         if 'bias' not in v.name and 'beta' not in v.name]
-            l2_loss = hp.reg_strength * tf.add_n([tf.nn.l2_loss(v) for v in reg_vars])
+            l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in reg_vars])
 
         return [p_loss, v_loss, l2_loss], [p_losses, v_losses]
 
