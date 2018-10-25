@@ -37,7 +37,7 @@ def base_go_hparams():
 
         sgd_momentum=0.9,
 
-        lr_boundaries=[200000, 400000, 600000, 700000],
+        lr_boundaries=[275000, 550000, 825000, 962500],
         lr_rates=[1e-1, 1e-2, 1e-3, 1e-4, 1e-5],
     )
 
