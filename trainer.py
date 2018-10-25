@@ -107,8 +107,9 @@ class GoTrainer:
 
     @staticmethod
     def metrics_string(metrics_val):
-        metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_val.items())
-        return metrics_string
+        loss_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_val.items() if "loss" in k)
+        acc_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_val.items() if "acc" in k)
+        return loss_string, acc_string
 
     def train_and_evaluate(self, restore_from=None):
         """Train the model and evaluate every epoch.
@@ -174,9 +175,10 @@ class GoTrainer:
 
                     tf.logging.info("Epoch {} - {}/{} with {} train steps"
                                     .format(epoch + 1, i + 1, len(split_train_steps), t_steps))
-                    train_metrics = self.train_epoch(sess, train_model_spec, t_steps, train_writer, reset)
-                    train_metrics_string = self.metrics_string(train_metrics)
-                    tf.logging.info("- Train metrics: " + train_metrics_string)
+                    train_metrics = self.train_epoch(sess, train_model_spec, t_steps, train_writer, True)
+                    loss_string, acc_string = self.metrics_string(train_metrics)
+                    tf.logging.info("- Train metrics: " + acc_string)
+                    tf.logging.info("- Train metrics: " + loss_string)
 
                     # Save weights
                     last_save_path = os.path.join(experiment_dir, 'last_weights',
@@ -184,9 +186,10 @@ class GoTrainer:
                     last_saver.save(sess, last_save_path, global_step=i + 1)
 
                     # Evaluate for one sub epoch on validation set
-                    eval_metrics = self.evaluate_epoch(sess, eval_model_spec, e_steps, eval_writers, reset)
-                    eval_metrics_string = self.metrics_string(eval_metrics)
-                    tf.logging.info("- Eval metrics: " + eval_metrics_string)
+                    eval_metrics = self.evaluate_epoch(sess, eval_model_spec, e_steps, eval_writers, True)
+                    loss_string, acc_string = self.metrics_string(eval_metrics)
+                    tf.logging.info("- Eval metrics: " + acc_string)
+                    tf.logging.info("- Eval metrics: " + loss_string)
 
                     # If best_eval, best_save_path
                     eval_p_acc = eval_metrics['policy_accuracy']
@@ -206,9 +209,9 @@ class GoTrainer:
                     last_json_path = os.path.join(experiment_dir, "metrics_eval_last_weights.json")
                     utils.save_dict_to_json(eval_metrics, last_json_path)
 
-                tf.logging.info("Epoch {}/{}".format(epoch + 1, begin_at_epoch + hp.num_epochs))
-                tf.logging.info("- Train metrics: " + train_metrics_string)
-                tf.logging.info("- Eval metrics: " + eval_metrics_string)
+                # tf.logging.info("Epoch {}/{}".format(epoch + 1, begin_at_epoch + hp.num_epochs))
+                # tf.logging.info("- Train metrics: " + train_metrics_string)
+                # tf.logging.info("- Eval metrics: " + eval_metrics_string)
 
     def test(self, restore_from):
         """Test the model
@@ -238,8 +241,9 @@ class GoTrainer:
             num_steps = (hp.test_size + hp.batch_size - 1) // hp.batch_size
             metrics = self.evaluate_epoch(sess, model_spec, num_steps)
 
-            metrics_string = self.metrics_string(metrics)
-            tf.logging.info("- Test metrics: " + metrics_string)
+            loss_string, acc_string = self.metrics_string(metrics)
+            tf.logging.info("- Test metrics: " + acc_string)
+            tf.logging.info("- Test metrics: " + loss_string)
 
             metrics_name = '_'.join(restore_from.split('/'))
             save_path = os.path.join(experiment_dir, "metrics_test_{}.json".format(metrics_name))

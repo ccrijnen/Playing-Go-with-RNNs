@@ -146,9 +146,9 @@ class GoModel(object):
         with tf.variable_scope("metrics"):
             metrics = {
                 'policy_accuracy': tf.metrics.accuracy(labels=p_targets, predictions=p_preds_idx),
+                'loss': tf.metrics.mean(loss),
                 'policy_loss': tf.metrics.mean(p_loss),
                 'value_loss': tf.metrics.mean(v_loss),
-                'loss': tf.metrics.mean(loss)
             }
             if hp.use_gogod_data and hp.use_kgs_data:
                 dataset = features["dataset_name"]
