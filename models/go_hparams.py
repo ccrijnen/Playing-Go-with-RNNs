@@ -30,7 +30,7 @@ def base_go_hparams():
 
         # model settings
         num_filters=256,
-        num_res_blocks=18,
+        num_res_blocks=8,
 
         reg_strength=1e-4,
         value_loss_weight=0.01,
