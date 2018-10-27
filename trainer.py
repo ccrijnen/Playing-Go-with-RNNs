@@ -17,13 +17,14 @@ class GoTrainer:
         self.problem = problem
         self.model = model
 
-    def train_epoch(self, sess, model_spec, num_steps, writer):
+    def train_epoch(self, sess, model_spec, num_steps, writer, reset=True):
         """Train the model on `num_steps` batches
         Args:
             sess: (tf.Session) current session
             model_spec: (dict) contains the graph operations or nodes needed for training
             num_steps: (int) train for this number of batches
             writer: (tf.summary.FileWriter) writer for summaries
+            reset: (bool) resets the iterator and metrics init ops
         """
         hp = self.hp
 
@@ -36,8 +37,9 @@ class GoTrainer:
         global_step = tf.train.get_global_step()
 
         # Load the training dataset into the pipeline and initialize the metrics local variables
-        sess.run(model_spec['iterator_init_op'])
-        sess.run(model_spec['metrics_init_op'])
+        if reset:
+            sess.run(model_spec['iterator_init_op'])
+            sess.run(model_spec['metrics_init_op'])
 
         # Use tqdm for progress bar
         t = trange(num_steps)
@@ -63,23 +65,23 @@ class GoTrainer:
 
         return metrics_val
 
-    def evaluate_epoch(self, sess, model_spec, num_steps, writer=None):
+    def evaluate_epoch(self, sess, model_spec, num_steps, writer=None, reset=True):
         """Train the model on `num_steps` batches.
         Args:
             sess: (tf.Session) current session
             model_spec: (dict) contains the graph operations or nodes needed for training
             num_steps: (int) train for this number of batches
             writer: (tf.summary.FileWriter) writer for summaries. Is None if we don't log anything
+            reset: (bool) resets the iterator and metrics init ops
         """
-        hp = self.hp
-
         update_metrics = model_spec['update_metrics']
         eval_metrics = model_spec['metrics']
         global_step = tf.train.get_global_step()
 
         # Load the evaluation dataset into the pipeline and initialize the metrics init op
-        sess.run(model_spec['iterator_init_op'])
-        sess.run(model_spec['metrics_init_op'])
+        if reset:
+            sess.run(model_spec['iterator_init_op'])
+            sess.run(model_spec['metrics_init_op'])
 
         # compute metrics over the dataset
         try:
@@ -142,7 +144,7 @@ class GoTrainer:
 
             # For tensorboard (takes care of writing summaries to files)
             train_writer = tf.summary.FileWriter(os.path.join(experiment_dir, 'train_summaries'), sess.graph)
-            eval_writers = tf.summary.FileWriter(os.path.join(experiment_dir, 'eval_summaries'), sess.graph)
+            eval_writer = tf.summary.FileWriter(os.path.join(experiment_dir, 'eval_summaries'), sess.graph)
 
             tf.gfile.MakeDirs(os.path.join(experiment_dir, 'last_weights'))
             tf.gfile.MakeDirs(os.path.join(experiment_dir, 'best_weights'))
@@ -167,7 +169,11 @@ class GoTrainer:
                 for i, (t_steps, e_steps) in enumerate(zip(split_train_steps, split_eval_steps)):
                     tf.logging.info("Epoch {} - {}/{} with {} train steps"
                                     .format(epoch + 1, i + 1, len(split_train_steps), t_steps))
-                    train_metrics = self.train_epoch(sess, train_model_spec, t_steps, train_writer)
+                    reset = False
+                    if i == 0:
+                        reset = True
+
+                    train_metrics = self.train_epoch(sess, train_model_spec, t_steps, train_writer, reset)
                     loss_string, acc_string = self.metrics_string(train_metrics)
                     tf.logging.info("- Train metrics: " + acc_string)
                     tf.logging.info("- Train metrics: " + loss_string)
@@ -178,7 +184,7 @@ class GoTrainer:
                     last_saver.save(sess, last_save_path, global_step=i + 1)
 
                     # Evaluate for one sub epoch on validation set
-                    eval_metrics = self.evaluate_epoch(sess, eval_model_spec, e_steps, eval_writers)
+                    eval_metrics = self.evaluate_epoch(sess, eval_model_spec, e_steps, eval_writer, reset)
                     loss_string, acc_string = self.metrics_string(eval_metrics)
                     tf.logging.info("- Eval metrics: " + acc_string)
                     tf.logging.info("- Eval metrics: " + loss_string)
