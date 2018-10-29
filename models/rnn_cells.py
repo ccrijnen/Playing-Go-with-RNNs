@@ -1,0 +1,103 @@
+from tensorflow.python.ops import nn_ops
+
+import tensorflow as tf
+
+
+class MyConv2DLSTMCell(tf.nn.rnn_cell.RNNCell):
+    """A LSTM cell with convolutions instead of multiplications.
+    Reference:
+        Xingjian, S. H. I., et al. "Convolutional LSTM network: A machine learning approach for precipitation
+            nowcasting." Advances in Neural Information Processing Systems. 2015.
+    """
+    def __init__(self,
+                 input_shape,
+                 output_channels,
+                 kernel_shape,
+                 use_bias=True,
+                 forget_bias=1.0,
+                 activation=tf.tanh,
+                 data_format='channels_last',
+                 reuse=None,
+                 name="conv_2d_lstm_cell"):
+        """Construct Conv2DLSTMCell.
+            Args:
+                input_shape: Shape of the input as int tuple, excluding the batch size.
+                output_channels: int, number of output channels of the conv LSTM.
+                kernel_shape: Shape of kernel as in tuple of size 2).
+                forget_bias: Forget bias.
+                name: Name of the module.
+            Raises:
+                ValueError: If `skip_connection` is `True` and stride is different from 1
+                    or if `input_shape` is incompatible with `conv_ndims`.
+            """
+        super(MyConv2DLSTMCell, self).__init__(_reuse=reuse, name=name)
+
+        self._input_shape = input_shape
+        self._output_channels = output_channels
+        self._kernel_shape = kernel_shape
+        self._use_bias = use_bias
+        self._forget_bias = forget_bias
+        self._activation = activation
+
+        if data_format == 'channels_last':
+            state_size = tf.TensorShape(self._input_shape[:-1] + [self._output_channels])
+            self._state_size = tf.nn.rnn_cell.LSTMStateTuple(state_size, state_size)
+            self._output_size = state_size
+
+            self._feature_axis = self.state_size.ndims
+            self._data_format = None
+        elif data_format == 'channels_first':
+            state_size = tf.TensorShape([self._output_channels] + self._input_shape[1:])
+            self._state_size = tf.nn.rnn_cell.LSTMStateTuple(state_size, state_size)
+            self._output_size = state_size
+
+            self._feature_axis = 1
+            self._data_format = 'NCHW'
+        else:
+            raise ValueError('Unknown data_format')
+
+    @property
+    def state_size(self):
+        return self._state_size
+
+    @property
+    def output_size(self):
+        return self._output_size
+
+    def call(self, inputs, state, scope=None):
+        cell, hidden = state
+        args = [inputs, hidden]
+
+        total_arg_size_depth = 0
+        shapes = [a.get_shape().as_list() for a in args]
+        shape_length = len(shapes[0])
+        for shape in shapes:
+            if len(shape) != 4:
+                raise ValueError("Conv Linear expects 4D arguments: %s" % str(shapes))
+            if len(shape) != len(shapes[0]):
+                raise ValueError("Conv Linear expects all args "
+                                 "to be of same Dimension: %s" % str(shapes))
+            else:
+                total_arg_size_depth += shape[self._feature_axis]
+        dtype = [a.dtype for a in args][0]
+
+        inputs = tf.concat(args, axis=self._feature_axis)
+
+        num_features = 4 * self._output_channels if self._output_channels > 1 else 4
+        strides = shape_length * [1]
+
+        kernel = tf.get_variable('kernel', self._kernel_shape + [total_arg_size_depth, num_features], dtype=dtype)
+
+        new_hidden = nn_ops.conv2d(inputs, kernel, strides, padding='SAME', data_format=self._data_format)
+        if self._use_bias:
+            new_hidden += tf.get_variable('bias', [num_features], initializer=tf.zeros_initializer(), dtype=dtype)
+
+        gates = tf.split(new_hidden, 4, axis=self._feature_axis)
+
+        input_gate, new_input, forget_gate, output_gate = gates
+        new_cell = tf.sigmoid(forget_gate + self._forget_bias) * cell
+        new_cell += tf.sigmoid(input_gate) * self._activation(new_input)
+        output = self._activation(new_cell) * tf.sigmoid(output_gate)
+
+        new_state = tf.nn.rnn_cell.LSTMStateTuple(new_cell, output)
+        return output, new_state

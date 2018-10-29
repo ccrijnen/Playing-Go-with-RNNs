@@ -1,0 +1,17 @@
+{
+    "rnn": {
+        "train_size": 787,
+        "dev_size": 100,
+        "test_size": 98
+    },
+    "rnn_sorted": {
+        "train_size": 1574,
+        "dev_size": 200,
+        "test_size": 196
+    },
+    "cnn": {
+        "train_size": 159951,
+        "dev_size": 19656,
+        "test_size": 20112
+    }
+}

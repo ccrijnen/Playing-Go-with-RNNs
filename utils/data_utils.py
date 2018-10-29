@@ -24,7 +24,7 @@ class DatasetStats:
             self.suffix += "_gogod"
 
         if problem.is_small:
-            self.suffix += "_toy"
+            self.suffix += "_small"
 
     def print_stats(self):
         for k, lengths in self.lengths.items():
@@ -127,7 +127,7 @@ class DatasetStats:
         for mode in modes:
             tmp = {}
             for split, game_lengths in self.lengths.items():
-                tmp[split + "_size"] = mode_to_stat[mode](game_lengths)
+                tmp[split + "_state_size"] = mode_to_stat[mode](game_lengths)
             self.sizes[mode] = tmp
 
         max_str = "-{:03}".format(max_length) if max_length else ""

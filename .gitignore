@@ -52,7 +52,6 @@ coverage.xml
 *.pot
 
 # Django stuff:
-*.log
 local_settings.py
 db.sqlite3
 
@@ -127,7 +126,8 @@ venv.bak/
 .idea/**/libraries
 
 # Data
-data/
+data/tmp/
+data/go_problem*
 
 # Version Control
 .idea/**/vcs.xml

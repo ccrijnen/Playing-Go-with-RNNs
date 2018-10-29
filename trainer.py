@@ -174,9 +174,9 @@ class GoTrainer:
                         reset = True
 
                     train_metrics = self.train_epoch(sess, train_model_spec, t_steps, train_writer, reset)
-                    loss_string, acc_string = self.metrics_string(train_metrics)
-                    tf.logging.info("- Train metrics: " + acc_string)
-                    tf.logging.info("- Train metrics: " + loss_string)
+                    train_loss_string, train_acc_string = self.metrics_string(train_metrics)
+                    tf.logging.info("- Train metrics: " + train_acc_string)
+                    tf.logging.info("- Train metrics: " + train_loss_string)
 
                     # Save weights
                     last_save_path = os.path.join(experiment_dir, 'last_weights',
@@ -185,9 +185,9 @@ class GoTrainer:
 
                     # Evaluate for one sub epoch on validation set
                     eval_metrics = self.evaluate_epoch(sess, eval_model_spec, e_steps, eval_writer, reset)
-                    loss_string, acc_string = self.metrics_string(eval_metrics)
-                    tf.logging.info("- Eval metrics: " + acc_string)
-                    tf.logging.info("- Eval metrics: " + loss_string)
+                    test_loss_string, test_acc_string = self.metrics_string(eval_metrics)
+                    tf.logging.info("- Eval metrics: " + test_acc_string)
+                    tf.logging.info("- Eval metrics: " + test_loss_string)
 
                     # If best_eval, best_save_path
                     eval_p_acc = eval_metrics['policy_accuracy']
@@ -207,9 +207,11 @@ class GoTrainer:
                     last_json_path = os.path.join(experiment_dir, "metrics_eval_last_weights.json")
                     utils.save_dict_to_json(eval_metrics, last_json_path)
 
-                # tf.logging.info("Epoch {}/{}".format(epoch + 1, begin_at_epoch + hp.num_epochs))
-                # tf.logging.info("- Train metrics: " + train_metrics_string)
-                # tf.logging.info("- Eval metrics: " + eval_metrics_string)
+                tf.logging.info("Epoch {}/{}".format(epoch + 1, begin_at_epoch + hp.num_epochs))
+                tf.logging.info("- Train metrics: " + train_acc_string)
+                tf.logging.info("- Train metrics: " + train_loss_string)
+                tf.logging.info("- Eval metrics: " + test_acc_string)
+                tf.logging.info("- Eval metrics: " + test_loss_string)
 
     def test(self, restore_from):
         """Test the model

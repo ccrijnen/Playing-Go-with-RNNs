@@ -1,12 +1,10 @@
 import tensorflow as tf
 
 from models.base_go_model import GoModel
+from models import rnn_cells
 
 
 class GoModelRNN(GoModel):
-    def rnn_cell(self, board_size):
-        raise NotImplementedError("Abstract Method")
-
     def bottom(self, features):
         self.max_game_length = tf.reduce_max(features["game_length"])
         return features
@@ -58,14 +56,14 @@ class GoModelRNN(GoModel):
             p_targets = features["p_targets"]
             p_losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=p_logits,
                                                                       labels=tf.stop_gradient(p_targets))
-            p_losses = tf.boolean_mask(p_losses, mask)
-            p_loss = tf.reduce_mean(p_losses)
+            p_losses_masked = tf.boolean_mask(p_losses, mask)
+            p_loss = tf.reduce_mean(p_losses_masked)
 
         with tf.variable_scope('value_loss'):
             v_targets = features['v_targets']
             v_losses = tf.square(v_targets - v_output)
-            v_losses = tf.boolean_mask(v_losses, mask)
-            v_loss = tf.reduce_mean(v_losses)
+            v_losses_masked = tf.boolean_mask(v_losses, mask)
+            v_loss = tf.reduce_mean(v_losses_masked)
 
         with tf.variable_scope('l2_loss'):
             reg_vars = [v for v in tf.trainable_variables()
@@ -89,13 +87,6 @@ class GoModelRNN(GoModel):
 
 
 class ConvLSTMModel(GoModelRNN):
-    def rnn_cell(self, board_size):
-        cell = tf.contrib.rnn.Conv2DLSTMCell(input_shape=[board_size, board_size, self.hparams.num_filters],
-                                             kernel_shape=[3, 3],
-                                             output_channels=2,
-                                             skip_connection=False)
-        return cell
-
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size
@@ -111,12 +102,76 @@ class ConvLSTMModel(GoModelRNN):
             with tf.variable_scope("residual_block_{}".format(i+1)):
                 out = self.residual_block(out)
 
-        with tf.variable_scope("lstm"):
-            cell = self.rnn_cell(board_size)
+        with tf.variable_scope("conv_lstm"):
             rnn_in = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
             rnn_in = tf.transpose(rnn_in,  perm=[0, 1, 3, 4, 2])
+
+            cell = tf.contrib.rnn.Conv2DLSTMCell(input_shape=[board_size, board_size, self.hparams.num_filters],
+                                                 kernel_shape=[3, 3],
+                                                 output_channels=2,
+                                                 use_bias=False,
+                                                 skip_connection=False)
 
             rnn_outputs, _ = tf.nn.dynamic_rnn(cell, rnn_in, sequence_length=game_length,
                                                time_major=False, dtype=tf.float32)
             rnn_outputs = tf.transpose(rnn_outputs, perm=[0, 1, 4, 2, 3])
         return rnn_outputs
+
+
+class MyConvLSTMModel(GoModelRNN):
+    def body(self, features):
+        hp = self.hparams
+        board_size = hp.board_size
+
+        game_length = features["game_length"]
+        inputs = features["inputs"]
+        inputs = tf.reshape(inputs, [-1, 3, board_size, board_size])
+
+        with tf.variable_scope("conv_block"):
+            out = self.conv_block(inputs)
+
+        for i in range(hp.num_res_blocks):
+            with tf.variable_scope("residual_block_{}".format(i+1)):
+                out = self.residual_block(out)
+
+        with tf.variable_scope("conv_lstm"):
+            rnn_in = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
+
+            cell = rnn_cells.MyConv2DLSTMCell(input_shape=[self.hparams.num_filters, board_size, board_size],
+                                              kernel_shape=[3, 3],
+                                              output_channels=2,
+                                              use_bias=False,
+                                              data_format='channels_first')
+
+            rnn_outputs, _ = tf.nn.dynamic_rnn(cell, rnn_in, sequence_length=game_length,
+                                               time_major=False, dtype=tf.float32)
+        return rnn_outputs
+
+
+class LSTMModel(GoModelRNN):
+    def body(self, features):
+        hp = self.hparams
+        board_size = hp.board_size
+
+        inputs = features["inputs"]
+        inputs = tf.reshape(inputs, [-1, 3, board_size, board_size])
+
+        with tf.variable_scope("conv_block"):
+            out = self.conv_block(inputs)
+
+        for i in range(hp.num_res_blocks):
+            with tf.variable_scope("residual_block_{}".format(i+1)):
+                out = self.residual_block(out)
+
+        with tf.variable_scope("lstm"):
+            rnn_in = tf.reshape(out, [-1, self.max_game_length, hp.num_filters * board_size * board_size])
+            rnn_in = tf.transpose(rnn_in, [1, 0, 2])
+
+            num_units = 2 * board_size * board_size
+            lstm = tf.contrib.cudnn_rnn.CudnnLSTM(num_layers=1, num_units=num_units)
+            rnn_outputs, _ = lstm(rnn_in)
+
+            rnn_outputs = tf.transpose(rnn_outputs, [1, 0, 2])
+            rnn_outputs = tf.reshape(rnn_outputs, [-1, self.max_game_length, 2, board_size, board_size])
+        return rnn_outputs
+

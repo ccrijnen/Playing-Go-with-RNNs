@@ -4,14 +4,14 @@ import random
 from data_generators import base_go_problem, go_preprocessing
 
 
-class GoProblem19Toy(base_go_problem.GoProblem):
+class GoProblem19Small(base_go_problem.GoProblem):
     """Small Go Problem for 19x19 go games (~1000 games)."""
     @property
     def board_size(self):
         return 19
 
     def dataset_filename(self):
-        return "go_problem_19_toy"
+        return "go_problem_19_small"
 
     @property
     def train_shards(self):
@@ -51,7 +51,7 @@ class GoProblem19Toy(base_go_problem.GoProblem):
         return data
 
 
-class GoProblem19ToyRnn(GoProblem19Toy):
+class GoProblem19SmallRnn(GoProblem19Small):
     @property
     def is_recurrent(self):
         return True
@@ -90,7 +90,7 @@ class GoProblem19ToyRnn(GoProblem19Toy):
             return example
 
 
-class GoProblem19ToyCnn(GoProblem19Toy):
+class GoProblem19SmallCnn(GoProblem19Small):
     @property
     def is_recurrent(self):
         return False

@@ -14,6 +14,7 @@ class GoModel(object):
 
         self.my_conv2d = functools.partial(
             tf.layers.conv2d,
+            strides=1,
             padding="SAME",
             data_format="channels_first",
             use_bias=False)
@@ -180,7 +181,6 @@ class GoModel(object):
         tf.summary.scalar('loss', loss)
         tf.summary.scalar('policy_loss', p_loss)
         tf.summary.scalar('value_loss', v_loss)
-        tf.summary.scalar('l2_loss', l2_loss)
 
         # -----------------------------------------------------------
         # MODEL SPECIFICATION
