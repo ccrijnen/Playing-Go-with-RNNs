@@ -22,6 +22,8 @@ def base_go_hparams():
         # resulting in a history_length*2+1 x board_size x board_size input
         history_length=0,
 
+        truncated_length=10,
+
         # trainer settings
         num_epochs=1,
         batch_size=1,
@@ -66,7 +68,7 @@ def go_params_19_rnn_sorted():
 
     hp_dict = {
         'sort_sequence_by_color': True,
-        'batch_size': 2
+        'batch_size': 1
     }
 
     hp.override_from_dict(hp_dict)
