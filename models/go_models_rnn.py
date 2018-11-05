@@ -79,7 +79,7 @@ class GoModelRNN(GoModel):
 
             p_correct = tf.equal(p_targets, predictions)
 
-            if mask is not None:
+            if mask is None:
                 mask = tf.sequence_mask(game_lengths)
 
             p_correct = tf.boolean_mask(p_correct, mask)
