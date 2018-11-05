@@ -167,8 +167,8 @@ class GoTrainer:
                     split_eval_steps = [total_eval_steps]
 
                 for i, (t_steps, e_steps) in enumerate(zip(split_train_steps, split_eval_steps)):
-                    tf.logging.info("Epoch {} - {}/{} with {} train steps"
-                                    .format(epoch + 1, i + 1, len(split_train_steps), t_steps))
+                    tf.logging.info("Epoch {} - {}/{} with {} train steps and {} eval steps"
+                                    .format(epoch + 1, i + 1, len(split_train_steps), t_steps, e_steps))
                     reset = False
                     if i == 0:
                         reset = True

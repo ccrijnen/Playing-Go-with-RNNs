@@ -9,7 +9,7 @@ def base_go_hparams():
         use_gogod_data=True,
         use_kgs_data=False,
 
-        # If this is True and the problem is recurrent it will split the game
+        # If this is True and the _problem is recurrent it will split the game
         # sequence into two sequences, one for all black moves and one for all
         # white moves
         sort_sequence_by_color=False,
@@ -18,7 +18,7 @@ def base_go_hparams():
         # than min_length
         min_length=50,
 
-        # When using a cnn problem it will keep this amount of positions as history
+        # When using a cnn _problem it will keep this amount of positions as history
         # resulting in a history_length*2+1 x board_size x board_size input
         history_length=0,
 
@@ -30,7 +30,7 @@ def base_go_hparams():
         eval_every=150,
         save_summary_steps=15,
 
-        # model settings
+        # _model settings
         num_filters=256,
         num_res_blocks=8,
 

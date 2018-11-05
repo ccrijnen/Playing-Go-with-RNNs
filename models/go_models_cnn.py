@@ -63,12 +63,15 @@ class GoModelCNN(GoModel):
 
         return [p_loss, v_loss, l2_loss], [p_losses, v_losses]
 
-    def policy_accuracy(self, features, predictions):
+    def policy_accuracy(self, features, predictions, mask=None):
         with tf.variable_scope('policy_accuracy'):
             p_targets = features["p_targets"]
             p_correct = tf.equal(p_targets, predictions)
-            p_acc = tf.reduce_mean(tf.cast(p_correct, tf.float32))
 
+            if mask is not None:
+                p_correct = tf.boolean_mask(p_correct, mask)
+
+            p_acc = tf.reduce_mean(tf.cast(p_correct, tf.float32))
             return p_acc
 
 

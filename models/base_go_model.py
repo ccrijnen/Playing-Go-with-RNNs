@@ -90,7 +90,7 @@ class GoModel(object):
     def loss(self, logits, features):
         raise NotImplementedError("Abstract Method")
 
-    def policy_accuracy(self, features, predictions):
+    def policy_accuracy(self, features, predictions, mask=None):
         raise NotImplementedError("Abstract Method")
 
     def model_fn(self, features, mode):
@@ -181,6 +181,29 @@ class GoModel(object):
         tf.summary.scalar('loss', loss)
         tf.summary.scalar('policy_loss', p_loss)
         tf.summary.scalar('value_loss', v_loss)
+
+        if hp.use_gogod_data and hp.use_kgs_data:
+            p_acc_gogod = self.policy_accuracy(transformed_features, p_preds_idx, mask_gogod)
+            tf.summary.scalar('policy_accuracy_gogod', p_acc_gogod)
+
+            p_acc_kgs = self.policy_accuracy(transformed_features, p_preds_idx, mask_kgs)
+            tf.summary.scalar('policy_accuracy_kgs', p_acc_kgs)
+
+            p_losses_gogod = tf.boolean_mask(p_losses, mask_gogod)
+            p_loss_gogod = tf.reduce_mean(p_losses_gogod)
+            tf.summary.scalar('policy_loss_gogod', p_loss_gogod)
+
+            p_losses_kgs = tf.boolean_mask(p_losses, mask_kgs)
+            p_loss_kgs = tf.reduce_mean(p_losses_kgs)
+            tf.summary.scalar('policy_loss_kgs', p_loss_kgs)
+
+            v_losses_gogod = tf.boolean_mask(v_losses, mask_gogod)
+            v_loss_gogod = tf.reduce_mean(v_losses_gogod)
+            tf.summary.scalar('value_loss_gogod', v_loss_gogod)
+
+            v_losses_kgs = tf.boolean_mask(v_losses, mask_kgs)
+            v_loss_kgs = tf.reduce_mean(v_losses_kgs)
+            tf.summary.scalar('value_loss_kgs', v_loss_kgs)
 
         # -----------------------------------------------------------
         # MODEL SPECIFICATION
