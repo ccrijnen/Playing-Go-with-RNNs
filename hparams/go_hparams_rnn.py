@@ -22,6 +22,9 @@ def base_go_hparams_rnn():
         num_filters=256,
         num_res_blocks=8,
 
+        # num filters to reshape the dense output to
+        num_dense_filter=2,
+
         # trainer settings
         num_epochs=1,
         batch_size=1,
@@ -59,14 +62,5 @@ def go_params_19_rnn_sorted():
     }
 
     hp.override_from_dict(hp_dict)
-
-    return hp
-
-
-def go_params_19_rnn_dense():
-    hp = go_params_19_rnn()
-
-    # num filters to reshape the dense output to
-    hp.add_hparam('num_dense_filter', 2)
 
     return hp

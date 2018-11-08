@@ -21,6 +21,9 @@ def base_go_hparams_cnn():
         num_filters=256,
         num_res_blocks=9,
 
+        # num filters to reshape the dense output to
+        num_dense_filter=2,
+
         # trainer settings
         num_epochs=1,
         batch_size=32,
@@ -43,22 +46,6 @@ def go_params_19_cnn():
     hp_dict = {
         'use_gogod_data': True,
         'use_kgs_data': True,
-    }
-
-    hp.override_from_dict(hp_dict)
-
-    return hp
-
-
-def go_params_19_cnn_dense():
-    hp = go_params_19_cnn()
-
-    # num filters to reshape the dense output to
-    hp.add_hparam('num_dense_filter', 2)
-
-    hp_dict = {
-        # model settings
-        "num_res_blocks": 8,
     }
 
     hp.override_from_dict(hp_dict)
