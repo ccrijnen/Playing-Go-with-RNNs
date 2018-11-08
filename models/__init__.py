@@ -1,11 +1,12 @@
-from models.go_models_cnn import AlphaZeroModel
-from models.go_models_rnn import ConvLSTMModel, MyConvLSTMModel, LSTMModel
+from models.go_models_cnn import AlphaZeroModel, AlphaZeroModelDense
+from models.go_models_rnn import ConvLSTMModel, MyConvLSTMModel, GRUModel
 
 __all__ = [
     "AlphaZeroModel",
+    "AlphaZeroModelDense",
     "ConvLSTMModel",
     "MyConvLSTMModel",
-    "LSTMModel"
+    "GRUModel"
 ]
 
 

@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 import os
 
 from utils import utils
@@ -6,6 +7,14 @@ from tqdm import trange
 from tensor2tensor.data_generators.problem import DatasetSplit
 from data_generators import base_go_problem
 from models import base_go_model
+
+
+def split_list(l, n):
+    chunk_size = int(np.ceil(len(l) / n))
+    # For item i in a range that is a length of l,
+    for i in range(n):
+        # Create an index range for l of n items:
+        yield len(l[i*chunk_size:i*chunk_size+chunk_size])
 
 
 class GoTrainer:
@@ -154,17 +163,18 @@ class GoTrainer:
                 # Run one epoch
                 # Compute number of batches in one epoch (one full pass over the training set)
                 total_train_steps = (hp.train_size + hp.batch_size - 1) // hp.batch_size
-                mod = total_train_steps % hp.eval_every
+                total_train_steps_list = list(range(total_train_steps))
 
-                split_train_steps = [hp.eval_every] * (total_train_steps // hp.eval_every)
-                split_train_steps += [mod] if mod is not 0 else []
+                length = int(np.ceil(total_train_steps / hp.eval_every))
+
+                split_train_steps = np.array_split(total_train_steps_list, length)
+                split_train_steps = [len(l) for l in split_train_steps]
 
                 total_eval_steps = (hp.dev_size + hp.batch_size - 1) // hp.batch_size
-                length = (len(split_train_steps) - 1)
-                if length is not 0:
-                    split_eval_steps = [total_eval_steps // length] * length + [total_eval_steps % length]
-                else:
-                    split_eval_steps = [total_eval_steps]
+                total_eval_steps_list = list(range(total_eval_steps))
+
+                split_eval_steps = np.array_split(total_eval_steps_list, length)
+                split_eval_steps = [len(l) for l in split_eval_steps]
 
                 for i, (t_steps, e_steps) in enumerate(zip(split_train_steps, split_eval_steps)):
                     tf.logging.info("Epoch {} - {}/{} with {} train steps and {} eval steps"

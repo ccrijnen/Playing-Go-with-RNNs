@@ -117,6 +117,7 @@ class ConvLSTMModel(GoModelRNN):
             rnn_outputs, _ = tf.nn.dynamic_rnn(cell, rnn_in, sequence_length=game_length,
                                                time_major=False, dtype=tf.float32)
             rnn_outputs = tf.transpose(rnn_outputs, perm=[0, 1, 4, 2, 3])
+
         return rnn_outputs
 
 
@@ -150,7 +151,7 @@ class MyConvLSTMModel(GoModelRNN):
         return rnn_outputs
 
 
-class LSTMModel(GoModelRNN):
+class GRUModel(GoModelRNN):
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size
@@ -165,15 +166,16 @@ class LSTMModel(GoModelRNN):
             with tf.variable_scope("residual_block_{}".format(i+1)):
                 out = self.residual_block(out)
 
-        with tf.variable_scope("lstm"):
+        with tf.variable_scope("gru"):
             rnn_in = tf.reshape(out, [-1, self.max_game_length, hp.num_filters * board_size * board_size])
             rnn_in = tf.transpose(rnn_in, [1, 0, 2])
 
-            num_units = 2 * board_size * board_size
-            lstm = tf.contrib.cudnn_rnn.CudnnLSTM(num_layers=1, num_units=num_units)
-            rnn_outputs, _ = lstm(rnn_in)
+            num_units = hp.num_dense_filter * board_size * board_size
+            gru = tf.contrib.cudnn_rnn.CudnnGRU(num_layers=1, num_units=num_units)
+            rnn_outputs, _ = gru(rnn_in)
 
             rnn_outputs = tf.transpose(rnn_outputs, [1, 0, 2])
-            rnn_outputs = tf.reshape(rnn_outputs, [-1, self.max_game_length, 2, board_size, board_size])
-        return rnn_outputs
+            rnn_outputs = tf.reshape(rnn_outputs,
+                                     [-1, self.max_game_length, hp.num_dense_filter, board_size, board_size])
 
+        return rnn_outputs

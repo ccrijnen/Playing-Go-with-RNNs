@@ -1,9 +1,12 @@
-from hparams.go_hparams import go_params_19_cnn, go_params_19_rnn, go_params_19_rnn_sorted
+from hparams.go_hparams_cnn import go_params_19_cnn, go_params_19_cnn_dense
+from hparams.go_hparams_rnn import go_params_19_rnn, go_params_19_rnn_sorted, go_params_19_rnn_dense
 
 __all__ = [
     "go_params_19_cnn",
+    "go_params_19_cnn_dense",
     "go_params_19_rnn",
     "go_params_19_rnn_sorted",
+    "go_params_19_rnn_dense"
 ]
 
 

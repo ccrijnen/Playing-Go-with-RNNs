@@ -10,7 +10,7 @@ from tensor2tensor.data_generators import generator_utils
 from tensor2tensor.data_generators import problem
 from tensor2tensor.utils import data_reader
 
-from hparams.go_hparams import base_go_hparams
+from hparams.go_hparams_cnn import base_go_hparams_cnn
 from utils import data_utils, sgf_utils
 
 _GOGOD_ZIP_NAME = 'GoGoDSpring2018.zip'
@@ -340,7 +340,7 @@ class GoProblem(problem.Problem):
     def get_hparams(self, hparams=None):
         """Returns problem_hparams."""
         if hparams is None:
-            hparams = base_go_hparams()
+            hparams = base_go_hparams_cnn()
         if self._hparams is not None:
             return self._hparams
 
@@ -435,7 +435,7 @@ class GoProblem(problem.Problem):
         assert data_dir
 
         if hparams is None:
-            hparams = base_go_hparams()
+            hparams = base_go_hparams_cnn()
 
         if not hasattr(hparams, "data_dir"):
             hparams.add_hparam("data_dir", data_dir)
