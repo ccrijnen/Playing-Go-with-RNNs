@@ -40,7 +40,7 @@ def base_go_hparams_cnn():
     )
 
 
-def go_params_19_cnn():
+def go_hparams_19_cnn():
     hp = base_go_hparams_cnn()
 
     hp_dict = {

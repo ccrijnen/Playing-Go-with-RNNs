@@ -41,7 +41,7 @@ def base_go_hparams_rnn():
     )
 
 
-def go_params_19_rnn():
+def go_hparams_19_rnn():
     hp = base_go_hparams_rnn()
 
     hp_dict = {
@@ -54,8 +54,8 @@ def go_params_19_rnn():
     return hp
 
 
-def go_params_19_rnn_sorted():
-    hp = go_params_19_rnn()
+def go_hparams_19_rnn_sorted():
+    hp = go_hparams_19_rnn()
 
     hp_dict = {
         'sort_sequence_by_color': True,
