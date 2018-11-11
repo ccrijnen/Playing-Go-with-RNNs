@@ -1,6 +1,57 @@
 from tensorflow.python.ops import nn_ops
+from tensorflow.python.keras import activations
 
 import tensorflow as tf
+
+
+class ConvRNNCell(tf.nn.rnn_cell.RNNCell):
+    def __init__(self, input_shape, output_channels, kernel_shape, activation=None, reuse=None, name="conv_rnn_cell"):
+        super(ConvRNNCell, self).__init__(_reuse=reuse, name=name)
+        self._input_shape = input_shape
+        self._output_channels = output_channels
+        self._kernel_shape = kernel_shape
+
+        if activation:
+            self._activation = activations.get(activation)
+        else:
+            self._activation = tf.tanh
+
+        self._output_size = tf.TensorShape([self._output_channels] + self._input_shape[1:])
+
+    @property
+    def output_size(self):
+        return self._output_size
+
+    @property
+    def state_size(self):
+        return self._output_size
+
+    def call(self, inputs, state, scope=None):
+        args = [inputs, state]
+
+        total_arg_size_depth = 0
+        shapes = [a.get_shape().as_list() for a in args]
+        shape_length = len(shapes[0])
+        for shape in shapes:
+            if len(shape) != 4:
+                raise ValueError("Conv Linear expects 4D arguments: %s" % str(shapes))
+            if len(shape) != len(shapes[0]):
+                raise ValueError("Conv Linear expects all args "
+                                 "to be of same Dimension: %s" % str(shapes))
+            else:
+                total_arg_size_depth += shape[1]
+        dtype = [a.dtype for a in args][0]
+
+        inputs = tf.concat(args, axis=1)
+
+        strides = shape_length * [1]
+        kernel = tf.get_variable('kernel', self._kernel_shape + [total_arg_size_depth, self._output_channels],
+                                 dtype=dtype)
+
+        new_hidden = tf.nn.conv2d(inputs, kernel, strides, padding='SAME', data_format='NCHW')
+
+        output = self._activation(new_hidden)
+        return output, output
 
 
 class ConvGRUCell(tf.nn.rnn_cell.RNNCell):
