@@ -355,13 +355,15 @@ class ConvGRUModel(GoModelConvRNN):
 
 
 def static_rnn(cell, inputs, init_state, min_length, name):
+    inputs = inputs[:, :min_length]
+    inputs = tf.unstack(inputs, min_length, axis=1)
+
     rnn_outputs = []
     with tf.variable_scope(name) as scope:
-        for i in range(min_length):
+        for i, rnn_in in enumerate(inputs):
             if i > 0:
                 scope.reuse_variables()
 
-            rnn_in = inputs[:, i]
             rnn_output, init_state = cell(rnn_in, init_state)
             rnn_outputs.append(rnn_output)
 
