@@ -18,7 +18,7 @@ class GoModelRNN(GoModel):
 
         legal_moves = features["legal_moves"]
 
-        body_output = tf.reshape(body_output, [-1, 2, board_size, board_size])
+        body_output = tf.reshape(body_output, [-1, hp.num_dense_filter, board_size, board_size])
 
         # Policy Head
         with tf.variable_scope('policy_head'):
@@ -369,7 +369,7 @@ def static_rnn(cell, inputs, init_state, min_length, name):
     return rnn_outputs
 
 
-class MyConvRNNModel(GoModelConvRNN):
+class MyConvRNNModel(GoModelRNN):
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size
@@ -403,7 +403,7 @@ class MyConvRNNModel(GoModelConvRNN):
         return rnn_outputs
 
 
-class MyConvLSTMModel(GoModelConvRNN):
+class MyConvLSTMModel(GoModelRNN):
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size
@@ -440,7 +440,7 @@ class MyConvLSTMModel(GoModelConvRNN):
         return rnn_outputs
 
 
-class MyConvGRUModel(GoModelConvRNN):
+class MyConvGRUModel(GoModelRNN):
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size
