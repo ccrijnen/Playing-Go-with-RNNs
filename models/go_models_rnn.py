@@ -361,7 +361,7 @@ def static_rnn(cell, inputs, init_state, min_length, name):
             if i > 0:
                 scope.reuse_variables()
 
-            rnn_in = inputs[:, i, :, :, :]
+            rnn_in = inputs[:, i]
             rnn_output, init_state = cell(rnn_in, init_state)
             rnn_outputs.append(rnn_output)
 
@@ -387,7 +387,7 @@ class MyConvRNNModel(GoModelConvRNN):
         rnn_ins = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
 
         cell = rnn_cells.ConvRNNCell(input_shape=[hp.num_filters, board_size, board_size],
-                                     output_channels=hp.num_filters,
+                                     output_channels=hp.num_dense_filter,
                                      kernel_shape=[3, 3],
                                      activation=tf.nn.relu)
 
@@ -397,9 +397,9 @@ class MyConvRNNModel(GoModelConvRNN):
 
         self.max_game_length = hp.min_length
         features["game_length"] = tf.constant([hp.min_length] * hp.batch_size, tf.int64)
-        features["p_targets"] = features["p_targets"][:, :50]
-        features["v_targets"] = features["v_targets"][:, :50]
-        features["legal_moves"] = features["legal_moves"][:, :50]
+        features["p_targets"] = features["p_targets"][:, :hp.min_length]
+        features["v_targets"] = features["v_targets"][:, :hp.min_length]
+        features["legal_moves"] = features["legal_moves"][:, :hp.min_length]
         return rnn_outputs
 
 
@@ -423,7 +423,7 @@ class MyConvLSTMModel(GoModelConvRNN):
 
         cell = tf.contrib.rnn.Conv2DLSTMCell(input_shape=[board_size, board_size, hp.num_filters],
                                              kernel_shape=[3, 3],
-                                             output_channels=hp.num_filters,
+                                             output_channels=hp.num_dense_filter,
                                              use_bias=False,
                                              skip_connection=False)
 
@@ -434,9 +434,9 @@ class MyConvLSTMModel(GoModelConvRNN):
 
         self.max_game_length = hp.min_length
         features["game_length"] = tf.constant([hp.min_length] * hp.batch_size, tf.int64)
-        features["p_targets"] = features["p_targets"][:, :50]
-        features["v_targets"] = features["v_targets"][:, :50]
-        features["legal_moves"] = features["legal_moves"][:, :50]
+        features["p_targets"] = features["p_targets"][:, :hp.min_length]
+        features["v_targets"] = features["v_targets"][:, :hp.min_length]
+        features["legal_moves"] = features["legal_moves"][:, :hp.min_length]
         return rnn_outputs
 
 
@@ -459,7 +459,7 @@ class MyConvGRUModel(GoModelConvRNN):
 
         cell = rnn_cells.ConvGRUCell(input_shape=[board_size, board_size],
                                      kernel_shape=[3, 3],
-                                     output_channels=hp.num_filters,
+                                     output_channels=hp.num_dense_filter,
                                      normalize=True,
                                      data_format='channels_first')
 
@@ -469,7 +469,7 @@ class MyConvGRUModel(GoModelConvRNN):
 
         self.max_game_length = hp.min_length
         features["game_length"] = tf.constant([hp.min_length] * hp.batch_size, tf.int64)
-        features["p_targets"] = features["p_targets"][:, :50]
-        features["v_targets"] = features["v_targets"][:, :50]
-        features["legal_moves"] = features["legal_moves"][:, :50]
+        features["p_targets"] = features["p_targets"][:, :hp.min_length]
+        features["v_targets"] = features["v_targets"][:, :hp.min_length]
+        features["legal_moves"] = features["legal_moves"][:, :hp.min_length]
         return rnn_outputs
