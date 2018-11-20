@@ -13,5 +13,10 @@
         "train_size": 159951,
         "dev_size": 19656,
         "test_size": 20112
+    },
+    "cnn_split_to_min_length": {
+        "train_size": 39350,
+        "dev_size": 5000,
+        "test_size": 4900
     }
 }

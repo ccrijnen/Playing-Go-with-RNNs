@@ -11,7 +11,9 @@ def base_go_hparams_cnn():
 
         # During training, we drop sequences whose inputs and targets are shorter
         # than min_length
-        min_length=50,
+        min_length=150,
+
+        split_to_min_length=False,
 
         # Keep the last positions as history
         # resulting in a history_length*2+1 x board_size x board_size input
@@ -46,6 +48,20 @@ def go_hparams_19_cnn():
     hp_dict = {
         'use_gogod_data': True,
         'use_kgs_data': True,
+    }
+
+    hp.override_from_dict(hp_dict)
+
+    return hp
+
+
+def go_hparams_19_cnn_split():
+    hp = base_go_hparams_cnn()
+
+    hp_dict = {
+        'use_gogod_data': True,
+        'use_kgs_data': True,
+        'split_to_min_length': True,
     }
 
     hp.override_from_dict(hp_dict)

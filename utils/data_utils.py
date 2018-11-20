@@ -16,15 +16,15 @@ class DatasetStats:
         self.sort_sequence_by_color = problem.sort_sequence_by_color
         self.suffix = "_{}".format(problem.board_size)
 
+        if problem.is_small:
+            self.suffix += "_small"
+
         if problem.use_gogod_data and problem.use_kgs_data:
             self.suffix += "_multi"
         elif problem.use_kgs_data:
             self.suffix += "_kgs"
         elif problem.use_gogod_data:
             self.suffix += "_gogod"
-
-        if problem.is_small:
-            self.suffix += "_small"
 
     def print_stats(self):
         for k, lengths in self.lengths.items():
@@ -58,6 +58,9 @@ class DatasetStats:
 
         if self.sort_sequence_by_color and mode == "rnn":
             mode += "_sorted"
+        if hasattr(self.hparams, "split_to_min_length") and self.hparams.split_to_min_length and mode == "cnn":
+            mode += "_split_to_min_length"
+
         return self.sizes[mode]
 
     def create_or_load_sizes(self):
@@ -71,7 +74,7 @@ class DatasetStats:
         if hasattr(self, "sizes"):
             return
 
-        modes = ['rnn', 'rnn_sorted', 'cnn']
+        modes = ['rnn', 'rnn_sorted', 'cnn', 'cnn_split_to_min_length']
 
         json_path = os.path.join(data_dir, 'dataset_params{}_{:03}{}.json'.format(self.suffix, min_length, max_str))
         if os.path.isfile(json_path):
@@ -98,12 +101,13 @@ class DatasetStats:
         tf.logging.info("Generating dataset_params{} in data dir with min_length {:03}{}"
                         .format(self.suffix, min_length, max_str))
 
-        modes = ['rnn', 'rnn_sorted', 'cnn']
+        modes = ['rnn', 'rnn_sorted', 'cnn', 'cnn_split_to_min_length']
 
         mode_to_stat = {
             'rnn': lambda x: len(x),
             'rnn_sorted': lambda x: 2 * len(x),
-            'cnn': lambda x: np.sum(x)
+            'cnn': lambda x: np.sum(x),
+            'cnn_split_to_min_length': lambda x: len(x) * min_length
         }
 
         if hasattr(self, 'sizes'):
@@ -127,7 +131,7 @@ class DatasetStats:
         for mode in modes:
             tmp = {}
             for split, game_lengths in self.lengths.items():
-                tmp[split + "_state_size"] = mode_to_stat[mode](game_lengths)
+                tmp[split + "_size"] = mode_to_stat[mode](game_lengths)
             self.sizes[mode] = tmp
 
         max_str = "-{:03}".format(max_length) if max_length else ""
@@ -152,5 +156,4 @@ def example_valid_size(example, min_length, max_length):
     length = example_length(example)
     return tf.logical_and(
         length >= min_length,
-        length <= max_length,
-        )
+        length <= max_length)

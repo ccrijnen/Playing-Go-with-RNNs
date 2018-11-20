@@ -48,7 +48,8 @@ class GoTrainer:
         # Load the training dataset into the pipeline and initialize the metrics local variables
         if reset:
             sess.run(model_spec['iterator_init_op'])
-            sess.run(model_spec['metrics_init_op'])
+
+        sess.run(model_spec['metrics_init_op'])
 
         # Use tqdm for progress bar
         t = trange(num_steps)
@@ -90,7 +91,8 @@ class GoTrainer:
         # Load the evaluation dataset into the pipeline and initialize the metrics init op
         if reset:
             sess.run(model_spec['iterator_init_op'])
-            sess.run(model_spec['metrics_init_op'])
+
+        sess.run(model_spec['metrics_init_op'])
 
         # compute metrics over the dataset
         try:
@@ -176,6 +178,9 @@ class GoTrainer:
                 split_eval_steps = np.array_split(total_eval_steps_list, length)
                 split_eval_steps = [len(l) for l in split_eval_steps]
 
+                total_train_metrics = {}
+                total_eval_metrics = {}
+
                 for i, (t_steps, e_steps) in enumerate(zip(split_train_steps, split_eval_steps)):
                     tf.logging.info("Epoch {} - {}/{} with {} train steps and {} eval steps"
                                     .format(epoch + 1, i + 1, len(split_train_steps), t_steps, e_steps))
@@ -199,6 +204,17 @@ class GoTrainer:
                     tf.logging.info("- Eval metrics: " + test_acc_string)
                     tf.logging.info("- Eval metrics: " + test_loss_string)
 
+                    if i == 0:
+                        for metric, val in train_metrics.items():
+                            total_train_metrics[metric] = val * t_steps
+                        for metric, val in eval_metrics.items():
+                            total_eval_metrics[metric] = val * e_steps
+                    else:
+                        for metric, val in train_metrics.items():
+                            total_train_metrics[metric] += val * t_steps
+                        for metric, val in eval_metrics.items():
+                            total_eval_metrics[metric] += val * e_steps
+
                     # If best_eval, best_save_path
                     eval_p_acc = eval_metrics['policy_accuracy']
                     if eval_p_acc >= best_eval_p_acc:
@@ -209,19 +225,40 @@ class GoTrainer:
                                                       'after-epoch-{}'.format(epoch + 1))
                         best_save_path = best_saver.save(sess, best_save_path, global_step=i + 1)
                         tf.logging.info("- Found new best policy accuracy, saving in {}".format(best_save_path))
+                        # Save best train metrics in a json file in the model directory
+                        best_json_path = os.path.join(experiment_dir, "metrics_train_best_weights.json")
+                        utils.save_dict_to_json(train_metrics, best_json_path)
                         # Save best eval metrics in a json file in the model directory
                         best_json_path = os.path.join(experiment_dir, "metrics_eval_best_weights.json")
                         utils.save_dict_to_json(eval_metrics, best_json_path)
+
+                    # Save latest train metrics in a json file in the model directory
+                    last_json_path = os.path.join(experiment_dir, "metrics_train_last_weights.json")
+                    utils.save_dict_to_json(train_metrics, last_json_path)
 
                     # Save latest eval metrics in a json file in the model directory
                     last_json_path = os.path.join(experiment_dir, "metrics_eval_last_weights.json")
                     utils.save_dict_to_json(eval_metrics, last_json_path)
 
+                for metric, val in total_train_metrics.items():
+                    total_train_metrics[metric] = val / total_train_steps
+
+                json_path = os.path.join(experiment_dir, "average_metrics_train.json")
+                utils.save_dict_to_json(total_train_metrics, json_path)
+                train_loss_string, train_acc_string = self.metrics_string(total_train_metrics)
+
+                for metric, val in total_eval_metrics.items():
+                    total_eval_metrics[metric] = val / total_eval_steps
+
+                json_path = os.path.join(experiment_dir, "average_metrics_eval.json")
+                utils.save_dict_to_json(total_eval_metrics, json_path)
+                test_loss_string, test_acc_string = self.metrics_string(total_eval_metrics)
+
                 tf.logging.info("Epoch {}/{}".format(epoch + 1, begin_at_epoch + hp.num_epochs))
-                tf.logging.info("- Train metrics: " + train_acc_string)
-                tf.logging.info("- Train metrics: " + train_loss_string)
-                tf.logging.info("- Eval metrics: " + test_acc_string)
-                tf.logging.info("- Eval metrics: " + test_loss_string)
+                tf.logging.info("- Average Train metrics: " + train_acc_string)
+                tf.logging.info("- Average Train metrics: " + train_loss_string)
+                tf.logging.info("- Average Eval metrics: " + test_acc_string)
+                tf.logging.info("- Average Eval metrics: " + test_loss_string)
 
     def test(self, restore_from):
         """Test the model

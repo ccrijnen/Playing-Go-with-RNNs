@@ -16,7 +16,9 @@ def base_go_hparams_rnn():
 
         # During training, we drop sequences whose inputs and targets are shorter
         # than min_length
-        min_length=50,
+        min_length=150,
+
+        split_to_min_length=False,
 
         # model settings
         num_filters=256,
@@ -47,6 +49,20 @@ def go_hparams_19_rnn():
     hp_dict = {
         'use_gogod_data': True,
         'use_kgs_data': True,
+    }
+
+    hp.override_from_dict(hp_dict)
+
+    return hp
+
+
+def go_hparams_19_rnn_split():
+    hp = base_go_hparams_rnn()
+
+    hp_dict = {
+        'use_gogod_data': True,
+        'use_kgs_data': True,
+        'split_to_min_length': True,
     }
 
     hp.override_from_dict(hp_dict)
