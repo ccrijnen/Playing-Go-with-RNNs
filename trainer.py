@@ -53,7 +53,6 @@ class GoTrainer:
 
         # Use tqdm for progress bar
         t = trange(num_steps)
-        # t = range(num_steps)
         try:
             for i in t:
                 # Evaluate summaries for tensorboard only once in a while
@@ -68,6 +67,7 @@ class GoTrainer:
                 # Log the loss in the tqdm progress bar
                 t.set_postfix(loss='{:05.3f}'.format(loss_val))
         except tf.errors.OutOfRangeError:
+            tf.logging.info("Step {}/{} out of range from iterator".format(i+1, num_steps))
             pass
 
         metrics_values = {k: v[0] for k, v in metrics.items()}
@@ -96,9 +96,10 @@ class GoTrainer:
 
         # compute metrics over the dataset
         try:
-            for _ in range(num_steps):
+            for i in range(num_steps):
                 sess.run(update_metrics)
         except tf.errors.OutOfRangeError:
+            tf.logging.info("Step {}/{} out of range from iterator".format(i + 1, num_steps))
             pass
 
         # Get the values of the metrics

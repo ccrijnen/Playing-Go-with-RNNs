@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import os
 import json
 
+from tensor2tensor.data_generators.problem import DatasetSplit
 from utils import sgf_utils, utils
 
 
@@ -113,15 +114,28 @@ class DatasetStats:
         if hasattr(self, 'sizes'):
             return self.sizes
 
-        files = self.problem.generate_dataset(self.hparams.tmp_dir)
+        splits = {
+            'train': DatasetSplit.TRAIN,
+            'dev': DatasetSplit.EVAL,
+            'test': DatasetSplit.TEST
+        }
         self.lengths = {}
 
-        for split, datasets in files.items():
+        for split, dataset_split in splits.items():
             game_lengths = []
 
-            for _, filenames in datasets:
-                for file in filenames:
-                    game_length = get_game_length(file)
+            data_filepattern = self.problem.filepattern(data_dir, dataset_split)
+            data_files = sorted(tf.contrib.slim.parallel_reader.get_data_files(data_filepattern))
+
+            for file in data_files:
+                record_iterator = tf.python_io.tf_record_iterator(path=file)
+
+                for string_record in record_iterator:
+                    example = tf.train.Example()
+                    example.ParseFromString(string_record)
+
+                    game_length = int(example.features.feature['game_length'].int64_list.value[0])
+
                     if (min_length <= game_length <= max_length) or (min_length <= game_length and not max_length):
                         game_lengths.append(game_length)
             self.lengths[split] = np.array(game_lengths)
@@ -141,10 +155,9 @@ class DatasetStats:
         self.print_stats()
 
 
-def get_game_length(filename):
-    _, plays, _ = sgf_utils.read_sgf(filename)
-    game_length = len(plays)
-    return game_length
+def get_game_length(filename, board_size, dataset_name):
+    data = sgf_utils.parse_sgf(filename, board_size, dataset_name)
+    return data["game_length"][0]
 
 
 def example_length(example):
