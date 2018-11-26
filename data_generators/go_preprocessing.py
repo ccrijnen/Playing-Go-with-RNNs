@@ -2,12 +2,23 @@ import tensorflow as tf
 
 
 def format_example_rnn(example):
-    inputs = example["inputs"]
+    """Function that prepares example for input into a RNN.
 
+    Formats positions for a RNN and returns input with shape [game_length, 3, board_size, board_size]:
+        1. channel: current players stones
+        2. channel: enemy players stones
+        3. channel: current player (ones means black, zeroes mean white)
+
+    Adds v_targets with shape [game_length] either 1 or -1:
+        1: current player wins
+        -1: enemy wins
+    """
+    inputs = example["inputs"]
     winner = example.pop('winner')
     to_play = example['to_play']
     to_play = tf.cast(to_play, tf.int64)
 
+    # format each position
     new_inputs = tf.map_fn(format_input_rnn, (inputs, to_play), dtype=tf.int8, back_prop=False)
     example["inputs"] = new_inputs
 
@@ -29,14 +40,17 @@ def format_example_rnn(example):
 
 
 def format_input_rnn(elem):
+    """Format a single position with shape [board_size, board_size] to [3, board_size, board_size]."""
     position, player = elem
 
     ones = tf.ones_like(position)
     zeros = tf.zeros_like(position)
 
+    # find all black stones and create tensor with only black stones
     black_mask = tf.equal(position, 1)
     black_stones = tf.where(black_mask, ones, zeros)
 
+    # find all white stones and create tensor with only white stones
     white_mask = tf.equal(position, -1)
     white_stones = tf.where(white_mask, ones, zeros)
 
@@ -55,6 +69,7 @@ def format_input_rnn(elem):
 
 
 def split_exmaple_by_color(example):
+    """Splits game into all black positions and all white positions."""
     inputs = example["inputs"]
     legal_moves = example["legal_moves"]
     p_targets = example["p_targets"]
@@ -62,6 +77,7 @@ def split_exmaple_by_color(example):
     to_play = example["to_play"]
     dataset_name = example["dataset_name"]
 
+    # create mask for all black positions
     mask_black = tf.equal(to_play, 1)
 
     game_length = tf.boolean_mask(inputs, mask_black)
@@ -76,6 +92,7 @@ def split_exmaple_by_color(example):
         "dataset_name": dataset_name
     }
 
+    # create mask for all white positions
     mask_white = tf.not_equal(to_play, 1)
 
     game_length = tf.boolean_mask(inputs, mask_white)
@@ -93,12 +110,27 @@ def split_exmaple_by_color(example):
 
 
 def format_example_cnn(example, hp):
+    """Function that prepares example for input into a CNN. It will save the last history_length positions.
+
+    Formats positions for a CNN and returns input with shape [game_length, history_length*2+1, board_size, board_size]:
+        1. channel: current players stones
+        2. channel: enemy players stones
+        3. channel: current player stones in the position before
+        4. channel: enemy player stones in the position before
+        ... (until history_length*2)
+        n. channel: current player (ones means black, zeroes mean white)
+
+    Adds v_targets with shape [game_length] either 1 or -1:
+        1: current player wins
+        -1: enemy wins
+    """
     board_size = hp.board_size
     history_length = hp.history_length
 
     inputs = example["inputs"]
     to_play = example['to_play']
 
+    # pad positions history_length times with moving padding at front and back
     padded = []
     for i in range(history_length):
         paddings = tf.constant([[i, history_length-1-i], [0, 0], [0, 0]])
@@ -108,8 +140,12 @@ def format_example_cnn(example, hp):
     padded_inputs = tf.stack(padded, axis=1)
 
     def format_input_cnn(elem):
+        """Format a single position with shape [history_length, board_size, board_size] to
+        [history_length*2+1, board_size, board_size].
+        """
         position, player = elem
 
+        # unstack at first dimension
         positions = tf.unstack(position, num=history_length, axis=0)
 
         ones = tf.ones([board_size, board_size], dtype=tf.int8)
@@ -117,16 +153,22 @@ def format_example_cnn(example, hp):
 
         pos_black = []
         pos_white = []
+        # for each of the history_length positions
         for pos in positions:
+            # find all black stones
             black_mask = tf.equal(pos, 1)
             black_stones = tf.where(black_mask, ones, zeros)
 
+            # find all white stones
             white_mask = tf.equal(pos, -1)
             white_stones = tf.where(white_mask, ones, zeros)
 
+            # extend black positions for player black
             pos_black.extend([black_stones, white_stones])
+            # extend white positions for player white
             pos_white.extend([white_stones, black_stones])
 
+        # append ones or zeros for current player
         pos_black.append(ones)
         pos_white.append(zeros)
 
@@ -167,6 +209,7 @@ def format_example_cnn(example, hp):
 
 
 def build_dataset_cnn(example):
+    """Splits all positions in the game into separate examples."""
     game_length = example["game_length"]
     dataset_name = example["dataset_name"]
 
@@ -209,9 +252,9 @@ def random_augmentation(example, board_size, mode="rnn"):
     * flip along diagonal axis from the upper right
 
     Args:
-        example: dict, go game
-        board_size: int, board size
-        mode: only needed if the example doesnt have the dimension game_length
+        example: (dict), go game
+        board_size: (int), board size
+        mode: (str), rnn or cnn, only needed if the example doesnt have the dimension game_length
     Return:
         Randomly augmented example
     """

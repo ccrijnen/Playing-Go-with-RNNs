@@ -73,16 +73,16 @@ def maybe_unzip_kgs(tmp_dir):
 
 
 def get_gogod_filenames(tmp_dir, board_size):
-    """Find all GoGoD sgf filenamses.
+    """Find all GoGoD sgf filenames.
 
     Searches at tmp_dir/GoGoD/Database/board_size_path/*.sgf
     where board_size_path is the path to the correct folders for the board_size.
 
     Args:
-        tmp_dir: str, temporary directory
-        board_size: int, board size of the go game
+        tmp_dir: (str), directory containing the unzipped files
+        board_size: (int), board size of the go game
     Returns:
-        list of str, gogod filenames
+        list of (str), gogod filenames
     """
     assert board_size in [9, 13, 15, 19, 21]
 
@@ -111,9 +111,9 @@ def get_kgs_filenames(tmp_dir):
     Searches at tmp_dir/KGS/*/*.sgf
 
     Args:
-        tmp_dir: str, temporary directory
+        tmp_dir: (str), temporary directory
     Returns:
-        list of str, kgs filenames
+        list of (str), kgs filenames
     """
     filepath = os.path.join(tmp_dir, _KGS_FOLDER)
     filenames = tf.gfile.Glob(filepath + _KGS_FILENAMES_GLOB)
@@ -126,8 +126,8 @@ def split_dataset(filenames, split_fractions):
     """Split dataset into train, dev and test.
 
     Args:
-        filenames: str, paths to split
-        split_fractions: dict<DatasetSplit, fraction>
+        filenames: (str), paths to split
+        split_fractions: dict<DatasetSplit, fraction>,
     Return:
         paths split into train, dev and test according to split fractions
     """
@@ -153,19 +153,22 @@ class GoProblem(problem.Problem):
     """Abstract Go Problem."""
     @property
     def board_size(self):
-        """Board Size of the Go games."""
+        """Board Size of the Go games (int)."""
         raise NotImplementedError
 
     @property
     def train_shards(self):
+        """Number of train tf_records files (int)."""
         raise NotImplementedError
 
     @property
     def is_small(self):
+        """True if the only using a small fraction of the data (bool)."""
         raise NotImplementedError
 
     @property
     def is_recurrent(self):
+        """True if the input is intended for a RNN (bool)."""
         raise NotImplementedError
 
     def generate_dataset(self, tmp_dir, unzip=True):
@@ -173,7 +176,7 @@ class GoProblem(problem.Problem):
 
     @property
     def num_moves(self):
-        """Equivalent to num_classes."""
+        """Equivalent to num_classes (int)."""
         return self.board_size * self.board_size + 1
 
     @property
@@ -223,22 +226,34 @@ class GoProblem(problem.Problem):
         """Go game generator from sgf format.
 
         Args:
-            datasets: (tuple), dataset name and path to sgf files to generate go games from
+            datasets: List of (str, str) tuples, Dataset name and path to sgf files to generate go games from
 
         Yields:
             A dictionary representing a go game with the following fields:
-            * positions: str of [game_length, 3, board_size, board_size] np.array, encoded game positions
-            * p_targets: [game_length] int list, index of the played move (incl. pass move)
-            * v_targets: [game_length] int list, winner of the game, 1 if current player is winning, -1 otherwise
-            * legal_moves: str of [game_length, num_moves] np.array, encoded legal_moves at every position
-            * game_length: int, game length
-            Fields positions, legal_moves, game_length is actually a list of the corresponding type.
+            * positions: (str) of np.array [game_length, 3, board_size, board_size], encoded game positions
+            * p_targets: (list) of ints [game_length], index of the played move (incl. pass move)
+            * legal_moves: (str) of np.array [game_length, num_moves], encoded legal_moves at every position
+            * to_play: (str) of np.array [game_length], current player at each position, BLACK: 1, WHITE: -1
+            * game_length: (int), game length
+            * winner: (int), winner of the game, BLACK: 1, WHITE: -1, DRAW: 0
+            * dataset_name: (str), either 'kgs' or 'gogod'
+            Fields positions, legal_moves, to_play, game_length, winner and dataset_name
+                is actually a list of the corresponding type.
         """
         for dataset_name, filenames in datasets:
             for file in filenames:
                 yield sgf_utils.parse_sgf(file, self.board_size, dataset_name)
 
     def get_gogod_dataset(self, tmp_dir, unzip=True):
+        """Find and split gogod sgf filenames into train, dev and test dataset splits.
+
+        Args:
+            tmp_dir: (str), path to directory containing the zipped/unzipped files
+            unzip: (bool), default True, If true will unzip the files first
+        Returns:
+            dict<str, list> of split and list of dataset_name, filenames tuple, gogod filenames split into
+                train, dev and test splits
+        """
         # unzip gogod zips if not already done
         if unzip:
             maybe_unzip_gogod(tmp_dir)
@@ -258,6 +273,15 @@ class GoProblem(problem.Problem):
         }
 
     def get_kgs_dataset(self, tmp_dir, unzip=True):
+        """Find and split kgs sgf filenames into train, dev and test dataset splits.
+
+        Args:
+            tmp_dir: (str), path to directory containing the zipped/unzipped files
+            unzip: (bool), default True, If true will unzip the files first
+        Returns:
+            dict<str, list> of split and list of dataset_name, filenames tuple, kgs filenames split into
+                train, dev and test splits
+        """
         # unzip kgs zips if not already done
         if unzip:
             maybe_unzip_kgs(tmp_dir)
@@ -283,11 +307,11 @@ class GoProblem(problem.Problem):
         KGS tar.gz from https://u-go.net/gamerecords/ are already downloaded and in the tmp_dir!
 
         Uses split fractions defined in self.split_fractions and
-        num shards per split defined in self.{train/dev/test]_shards_{gogod/kgs}.
+        num shards per split defined in self.{train/dev/test]_shards.
         Args:
-            data_dir: str, final data directory.
-            tmp_dir: str, directory containing KGS and GoGoD zips
-            task_id: int, task id.
+            data_dir: (str), final data directory.
+            tmp_dir: (str), directory containing KGS and GoGoD zips
+            task_id: (int), task id.
         """
         data = self.generate_dataset(tmp_dir)
 
@@ -375,6 +399,7 @@ class GoProblem(problem.Problem):
         return self._hparams
 
     def add_hparams(self, hparams):
+        # add train, dev and test sizes to hparams
         stats = data_utils.DatasetStats(self, hparams)
         if self.is_recurrent:
             sizes = stats.get_sizes('rnn')

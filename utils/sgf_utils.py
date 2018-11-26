@@ -45,15 +45,16 @@ def parse_sgf(filename, board_size, dataset_name):
         dataset_name: (str) optional, name of the dataset
     Returns:
         A dictionary representing a go game with the following fields:
-        * positions: (str) of [game_length, board_size, board_size] np.array, encoded game positions,
+        * positions: (str) of np.array [game_length, board_size, board_size] , encoded game positions,
             stones BLACK: 1 and WHITE: -1
         * p_targets: (int) list, shape: [game_length], index of the played move (incl. pass move)
         * legal_moves: (str) of [game_length, num_moves] np.array, encoded legal_moves at every position
-        * to_play: (int), current player, BLACK: 1, WHITE: -1
+        * to_play: (str) of np.array [game_length], current player at each position, BLACK: 1, WHITE: -1
         * game_length: (int), game length
         * winner: (int), winner of the game, BLACK: 1, WHITE: -1, DRAW: 0
-        * dataset_name: (str), either 'kgs' or 'gogod' to
-        Fields positions, legal_moves, game_length is actually a list of the corresponding type.
+        * dataset_name: (str), either 'kgs' or 'gogod'
+        Fields positions, legal_moves, to_play, game_length, winner and dataset_name
+             is actually a list of the corresponding type.
 
         or
 
@@ -65,32 +66,39 @@ def parse_sgf(filename, board_size, dataset_name):
 
     go.set_board_size(board_size)
 
+    # read the sgf
     sgf_board, plays, sgf_game = read_sgf(filename)
 
     size = sgf_board.side
 
     assert size == go.BOARD_SIZE, "Wrong Board Size in SGF"
 
+    # prepare sgf_board and plays
     np_board = np.array(sgf_board.board)
-
     initial_board = _prep_board(np_board)
     plays = _prep_plays(plays)
 
+    # get first player
     try:
         first_player = _get_first_player(plays)
     except IndexError:
         tf.logging.error("Skipped reading Go game from sgf '{}' because no moves were found!".format(filename))
         return None
 
+    # calculate the number of different possible moves
     num_moves = go.BOARD_SIZE * go.BOARD_SIZE + 1
 
+    # save game_length and winner
     game_length = len(plays)
     winner = _get_winner(sgf_game)
+
+    # create numpy arrays to hold the parsed data
     to_play = np.zeros([game_length], dtype=np.int8)
     positions = np.zeros([game_length, go.BOARD_SIZE, go.BOARD_SIZE], dtype=np.int8)
     p_targets = np.zeros([game_length], dtype=np.int16)
     legal_moves = np.zeros([game_length, num_moves], dtype=np.uint8)
 
+    # initialize go environment
     go_game = go.GoEnvironment(None, initial_board, to_play=first_player)
 
     for i, play in enumerate(plays):
@@ -119,6 +127,7 @@ def parse_sgf(filename, board_size, dataset_name):
                              .format(filename))
             return None
 
+    # prepare data for the tf_record reader
     data = {
         'positions': [positions.tostring()],
         'p_targets': p_targets.tolist(),
@@ -133,6 +142,7 @@ def parse_sgf(filename, board_size, dataset_name):
 
 
 def read_sgf(filename):
+    """Parse sgf."""
     with open(filename, "rb") as f:
         sgf_src = f.read()
 

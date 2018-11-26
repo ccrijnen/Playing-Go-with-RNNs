@@ -62,6 +62,8 @@ def go_hparams_19_cnn_split():
         'use_gogod_data': True,
         'use_kgs_data': True,
         'split_to_min_length': True,
+
+        'lr_boundaries': [160000, 320000, 480000, 560000],
     }
 
     hp.override_from_dict(hp_dict)

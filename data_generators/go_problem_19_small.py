@@ -66,10 +66,19 @@ class GoProblem19SmallRnn(GoProblem19Small):
         return True
 
     def preprocess_example(self, example, mode, hparams):
+        """Preprocessing.
+
+        1. if split_to_min_length is True in hparams:
+            only use the first min_length number of positions
+
+        2. prepare inputs for RNN
+
+        3. if sort_sequence_by_color is True in hparams:
+            split game into 2 sequences (all black and all white positions)
+
+        4. randomly augment the example
+        """
         if hasattr(hparams, "split_to_min_length") and hparams.split_to_min_length:
-            # game_length = example["game_length"]
-            # min_length = tf.constant(hparams.min_length, tf.int64)
-            # example["game_length"] = tf.cond(game_length < hparams.min_length, lambda: game_length, lambda: min_length)
             example["game_length"] = tf.constant(hparams.min_length, tf.int64)
             example["inputs"] = example["inputs"][:hparams.min_length]
             example["to_play"] = example["to_play"][:hparams.min_length]
@@ -115,10 +124,18 @@ class GoProblem19SmallCnn(GoProblem19Small):
         return False
 
     def preprocess_example(self, example, mode, hparams):
+        """Preprocessing.
+
+        1. if split_to_min_length is True in hparams:
+            only use the first min_length number of positions
+
+        2. prepare inputs for CNN
+
+        3. split the game into separate examples
+
+        4. randomly augment the examples individually
+        """
         if hasattr(hparams, "split_to_min_length") and hparams.split_to_min_length:
-            # game_length = example["game_length"]
-            # min_length = tf.constant(hparams.min_length, tf.int64)
-            # example["game_length"] = tf.cond(game_length < hparams.min_length, lambda: game_length, lambda: min_length)
             example["game_length"] = tf.constant(hparams.min_length, tf.int64)
             example["inputs"] = example["inputs"][:hparams.min_length]
             example["to_play"] = example["to_play"][:hparams.min_length]
