@@ -126,8 +126,7 @@ venv.bak/
 .idea/**/libraries
 
 # Data
-data/tmp/
-data/go_problem*
+data/
 
 # Version Control
 .idea/**/vcs.xml

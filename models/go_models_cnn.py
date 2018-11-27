@@ -4,6 +4,7 @@ from models.base_go_model import GoModel
 
 
 class GoModelCNN(GoModel):
+    """Base CNN Go Model."""
     def bottom(self, features):
         return features
 
@@ -76,6 +77,7 @@ class GoModelCNN(GoModel):
 
 
 class AlphaZeroModel(GoModelCNN):
+    """Model as in the AlphaGo Zero paper."""
     def body(self, features):
         hp = self.hparams
         inputs = features["inputs"]
@@ -91,6 +93,7 @@ class AlphaZeroModel(GoModelCNN):
 
 
 class AlphaZeroModelDense(GoModelCNN):
+    """Model as in AlphaGo Zero paper but replacing last residual block with a dense layer."""
     def body(self, features):
         hp = self.hparams
         inputs = features["inputs"]

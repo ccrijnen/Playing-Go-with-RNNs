@@ -22,13 +22,16 @@ parser.add_argument('--hparams', type=str, required=True,
 
 parser.add_argument('--experiment_dir', type=str, required=True,
                     help="Directory to save summaries and log to")
-parser.add_argument('--restore_dir',  type=str, default='best_weights',
+parser.add_argument('--restore_dir',  type=str, default=None,
                     help="Optional, directory containing weights to reload before training")
+parser.add_argument('--test_dir',  type=str, default='best_weights',
+                    help="Optional, directory containing weights to use for the test dataset")
 
 parser.add_argument('--overwrite_results', action='store_true', default=False,
-                    help="TODO")
+                    help="Set this flag to overwrite previous results if they already exist "
+                         "in the experiment dir")
 parser.add_argument('--skip_generate_data', action='store_true', default=False,
-                    help="TODO")
+                    help="Set this flag to not generate the tf record files if they already exist")
 
 
 def set_random_seed(seed):
@@ -42,41 +45,32 @@ def main(problem,
          hparams,
          experiment_dir,
          restore_dir,
+         test_dir,
          overwrite_results,
          skip_generate_data):
     set_random_seed(230)
     tf.gfile.MakeDirs(experiment_dir)
 
+    # Check that we are not overwriting some previous experiment
     if not overwrite_results:
-        # Check that we are not overwriting some previous experiment
-        # Comment these lines if you are developing your _model and don't care about overwritting
         model_dir_has_best_weights = os.path.isdir(os.path.join(experiment_dir, "best_weights"))
         overwriting = model_dir_has_best_weights and restore_dir is None
         assert not overwriting, "Weights found in model_dir, aborting to avoid overwrite"
 
-    hp = hparams()
-    hp.add_hparam("experiment_dir", experiment_dir)
-
     utils.set_logger(os.path.join(experiment_dir, 'train.log'))
 
-    problem = problem()
-    hp = problem.get_hparams(hp)
-
-    if not skip_generate_data:
-        tf.logging.info("Creating the datasets...")
-        problem.generate_data(hp.data_dir, hp.tmp_dir)
-        tf.logging.info("- done")
-
-    model = model(hp)
-
-    my_trainer = trainer.GoTrainer(problem, model, hp)
-    my_trainer.train_and_evaluate()
+    # initialize the GoTrainer
+    my_trainer = trainer.GoTrainer(problem, model, hparams, experiment_dir, skip_generate_data)
+    # train and evaluate network on dev split
+    my_trainer.train_and_evaluate(restore_from=restore_dir)
 
     utils.set_logger(os.path.join(experiment_dir, 'test.log'))
-    my_trainer.test(restore_dir)
+    # evaluate the network on test split
+    my_trainer.test(test_dir)
 
 
 if __name__ == '__main__':
+    """Parse command line arguments and start main function."""
     args = parser.parse_args()
 
     model_name = args.model
@@ -90,8 +84,9 @@ if __name__ == '__main__':
 
     _experiment_dir = args.experiment_dir
     _restore_dir = args.restore_dir
+    _test_dir = args.test_dir
 
     _overwrite_results = args.overwrite_results
     _skip_generate_data = args.skip_generate_data
 
-    main(_problem, _model, _hp, _experiment_dir, _restore_dir, _overwrite_results, _skip_generate_data)
+    main(_problem, _model, _hp, _experiment_dir, _restore_dir, _test_dir, _overwrite_results, _skip_generate_data)

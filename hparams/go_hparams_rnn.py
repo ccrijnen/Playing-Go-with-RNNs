@@ -2,12 +2,13 @@ import tensorflow as tf
 
 
 def base_go_hparams_rnn():
+    """Base RNN hyperparameters for Go Models."""
     return tf.contrib.training.HParams(
         data_dir="./data",
         tmp_dir="./data/tmp/",
 
         use_gogod_data=True,
-        use_kgs_data=False,
+        use_kgs_data=True,
 
         # If this is True and the _problem is recurrent it will split the game
         # sequence into two sequences, one for all black moves and one for all
@@ -24,6 +25,7 @@ def base_go_hparams_rnn():
         num_filters=256,
         num_res_blocks=8,
 
+        # used in rnn models not using a conv cell
         # num filters to reshape the dense output to
         num_dense_filter=2,
 
@@ -45,14 +47,6 @@ def base_go_hparams_rnn():
 
 def go_hparams_19_rnn():
     hp = base_go_hparams_rnn()
-
-    hp_dict = {
-        'use_gogod_data': True,
-        'use_kgs_data': True,
-    }
-
-    hp.override_from_dict(hp_dict)
-
     return hp
 
 

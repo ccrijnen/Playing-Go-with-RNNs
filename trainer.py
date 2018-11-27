@@ -1,3 +1,10 @@
+# sources:
+# https://github.com/cs230-stanford/cs230-code-examples/tree/master/tensorflow/nlp/model/training.py
+# https://github.com/cs230-stanford/cs230-code-examples/blob/master/tensorflow/nlp/train.py
+#
+# https://github.com/cs230-stanford/cs230-code-examples/blob/master/tensorflow/nlp/model/evaluation.py
+# https://github.com/cs230-stanford/cs230-code-examples/blob/master/tensorflow/nlp/evaluate.py
+
 import tensorflow as tf
 import numpy as np
 import os
@@ -5,24 +12,27 @@ import os
 from utils import utils
 from tqdm import trange
 from tensor2tensor.data_generators.problem import DatasetSplit
-from data_generators import base_go_problem
-from models import base_go_model
-
-
-def split_list(l, n):
-    chunk_size = int(np.ceil(len(l) / n))
-    # For item i in a range that is a length of l,
-    for i in range(n):
-        # Create an index range for l of n items:
-        yield len(l[i*chunk_size:i*chunk_size+chunk_size])
 
 
 class GoTrainer:
-    def __init__(self, problem, model, hparams):
-        assert isinstance(problem, base_go_problem.GoProblem)
-        assert isinstance(model, base_go_model.GoModel)
+    """Class used to train and evaluate Go Models."""
 
-        self.hp = hparams
+    def __init__(self, problem, model, hparams, experiment_dir, skip_generate_data=False):
+        """Initialize the problem, model and hparams classes."""
+        hp = hparams()
+        hp.add_hparam("experiment_dir", experiment_dir)
+
+        problem = problem()
+        hp = problem.get_hparams(hp)
+
+        if not skip_generate_data:
+            tf.logging.info("Creating the datasets...")
+            problem.generate_data(hp.data_dir, hp.tmp_dir)
+            tf.logging.info("- done")
+
+        model = model(hp)
+
+        self.hp = hp
         self.problem = problem
         self.model = model
 
@@ -33,7 +43,7 @@ class GoTrainer:
             model_spec: (dict) contains the graph operations or nodes needed for training
             num_steps: (int) train for this number of batches
             writer: (tf.summary.FileWriter) writer for summaries
-            reset: (bool) resets the iterator and metrics init ops
+            reset: (bool) resets the iterator
         """
         hp = self.hp
 
@@ -82,7 +92,7 @@ class GoTrainer:
             model_spec: (dict) contains the graph operations or nodes needed for training
             num_steps: (int) train for this number of batches
             writer: (tf.summary.FileWriter) writer for summaries. Is None if we don't log anything
-            reset: (bool) resets the iterator and metrics init ops
+            reset: (bool) resets the iterator
         """
         update_metrics = model_spec['update_metrics']
         eval_metrics = model_spec['metrics']
@@ -273,6 +283,7 @@ class GoTrainer:
         return split_to_mode[split]
 
     def _get_model_spec(self, dataset_split):
+        """Load dataset and initialize model."""
         problem = self.problem
         hp = self.hp
         mode = self._split_to_mode(dataset_split)

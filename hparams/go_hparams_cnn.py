@@ -2,6 +2,7 @@ import tensorflow as tf
 
 
 def base_go_hparams_cnn():
+    """Base CNN hyperparameters for Go Models."""
     return tf.contrib.training.HParams(
         data_dir="./data",
         tmp_dir="./data/tmp/",
@@ -23,6 +24,7 @@ def base_go_hparams_cnn():
         num_filters=256,
         num_res_blocks=9,
 
+        # only used in cnn models with a dense layer
         # num filters to reshape the dense output to
         num_dense_filter=2,
 

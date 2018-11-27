@@ -5,9 +5,16 @@ import functools
 
 
 class GoModel(object):
+    """Base Go Model."""
     def __init__(self,
                  hparams,
                  mode=tf.estimator.ModeKeys.TRAIN):
+        """Save hparams and set model to mode.
+
+        Args:
+            hparams: (tf.contrib.training.HParams) contains hyperparameters of the model
+            mode: (tf.estimator.ModeKeys) TRAIN, EVAL or PREDICT
+        """
         hparams = copy.copy(hparams)
         self._original_hparams = hparams
         self.set_mode(mode)
@@ -46,6 +53,13 @@ class GoModel(object):
         self._hparams = hparams
 
     def conv_block(self, inputs):
+        """Conv Block as in the AlphaGo Zero paper.
+
+        Args:
+            inputs: (tf.Tensor) input of the conv block
+        Returns:
+            (tf.Tensor) output of the conv block
+        """
         hp = self._hparams
 
         is_training = hp.mode == tf.estimator.ModeKeys.TRAIN
@@ -58,6 +72,13 @@ class GoModel(object):
         return conv_output
 
     def residual_block(self, inputs):
+        """Residual Block as in the AlphaGo Zero paper.
+
+        Args:
+            inputs: (tf.Tensor) input of the residual block
+        Returns:
+            (tf.Tensor) output of the residual block
+        """
         hp = self._hparams
 
         is_training = hp.mode == tf.estimator.ModeKeys.TRAIN
@@ -78,22 +99,79 @@ class GoModel(object):
         return output
 
     def bottom(self, features):
+        """Transform features.
+
+        Args:
+            features: (dict) contains the inputs of the graph (features, labels...)
+                this can be `tf.placeholder` or outputs of `tf.data`
+        Returns:
+            (dict) contains transformed inputs of the graph (features, labels...)
+        """
         self.max_game_length = tf.reduce_max(features["game_length"])
         return features
 
     def body(self, features):
+        """Define graph operations for the output that will be passed into the policy and value heads.
+
+        Args:
+            features: (dict) contains the inputs of the graph (features, labels...)
+                this can be `tf.placeholder` or outputs of `tf.data`
+        Returns:
+            (tf.Tensor) output of the model before the policy and value heads
+        """
         raise NotImplementedError("Abstract Method")
 
     def top(self, body_output, features):
+        """Define graph operations for the policy and value heads.
+
+        Args:
+            body_output: (tf.Tensor) output of the body
+            features: (dict) contains the inputs of the graph (features, labels...)
+                this can be `tf.placeholder` or outputs of `tf.data`
+        Returns:
+            (tf.Tensor) output of the policy head
+            (tf.Tensor) output of the value head
+        """
         raise NotImplementedError("Abstract Method")
 
     def loss(self, logits, features):
+        """Define graph operations of the loss as in the AlphaGo Zero paper.
+
+        Args:
+            logits: ([tf.Tensor, tf.Tensor]) outputs of the policy and value heads
+            features: (dict) contains the inputs of the graph (features, labels...)
+                this can be `tf.placeholder` or outputs of `tf.data`
+        Returns:
+            ([tf.Tensor, tf.Tensor, tf.Tensor]) policy loss, value loss and l2 regularization loss
+            ([tf.Tensor, tf.Tensor]) policy losses and value losses before mean of the batch
+        """
         raise NotImplementedError("Abstract Method")
 
     def policy_accuracy(self, features, predictions, mask=None):
+        """Define graph operations for the policy accuracy.
+
+        Args:
+            features: (dict) contains the inputs of the graph (features, labels...)
+                this can be `tf.placeholder` or outputs of `tf.data`
+            predictions: (tf.Tensor) argmax of the policy output
+            mask: (tf.Tensor) with dtype tf.bool as mask for the predictions
+        Returns:
+            (tf.Tensor) output of the model before the policy and value heads
+        """
         raise NotImplementedError("Abstract Method")
 
     def model_fn(self, features, mode):
+        """Model function defining the graph operations.
+
+        Args:
+            mode: (tf.estimator.ModeKeys) TRAIN, EVAL or PREDICT
+            features: (dict) contains the inputs of the graph (features, labels...)
+                this can be `tf.placeholder` or outputs of `tf.data`
+        Returns:
+            model_spec: (dict) contains the graph operations or nodes needed for training / evaluation
+
+        source https://github.com/cs230-stanford/cs230-code-examples/blob/master/tensorflow/nlp/model/model_fn.py
+        """
         self.set_mode(mode)
         hp = self._hparams
 

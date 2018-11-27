@@ -10,6 +10,11 @@ from utils import sgf_utils, utils
 
 
 class DatasetStats:
+    """Calculates the number of train, dev and test examples for a problem with specific hparams and
+    saves the number of examples for every mode to data/dataset_params_{problem_suffix}.json.
+
+    If it finds data/dataset_params_{problem_suffix}.json for the Problem, loads the number of examples from the file.
+    """
     def __init__(self, problem, hparams):
         # set random seed to make sure shuffle is re-creatable
         self.problem = problem
@@ -59,7 +64,7 @@ class DatasetStats:
 
         if self.sort_sequence_by_color and mode == "rnn":
             mode += "_sorted"
-        if hasattr(self.hparams, "split_to_min_length") and self.hparams.split_to_min_length and mode == "cnn":
+        if hasattr(self.hparams, "split") and self.hparams.split_to_min_length and mode == "cnn":
             mode += "_split_to_min_length"
 
         return self.sizes[mode]
@@ -75,7 +80,7 @@ class DatasetStats:
         if hasattr(self, "sizes"):
             return
 
-        modes = ['rnn', 'rnn_sorted', 'cnn', 'cnn_split_to_min_length']
+        modes = ['rnn', 'rnn_sorted', 'cnn', 'cnn_split']
 
         json_path = os.path.join(data_dir, 'dataset_params{}_{:03}{}.json'.format(self.suffix, min_length, max_str))
         if os.path.isfile(json_path):
@@ -153,11 +158,6 @@ class DatasetStats:
         utils.save_dicts_to_json(self.sizes, file_out)
 
         self.print_stats()
-
-
-def get_game_length(filename, board_size, dataset_name):
-    data = sgf_utils.parse_sgf(filename, board_size, dataset_name)
-    return data["game_length"][0]
 
 
 def example_length(example):

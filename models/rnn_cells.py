@@ -5,7 +5,20 @@ import tensorflow as tf
 
 
 class ConvRNNCell(tf.nn.rnn_cell.RNNCell):
+    """A RNN cell with convolutions instead of multiplications."""
     def __init__(self, input_shape, output_channels, kernel_shape, activation=None, reuse=None, name="conv_rnn_cell"):
+        """Construct ConvGRUCell.
+
+        Args:
+            input_shape: (int, int, int) Shape of the input as int tuple, excluding the batch size
+            output_channels: (int) number of output channels of the conv LSTM
+            kernel_shape: (int, int) Shape of kernel as in tuple of size 2
+            activation: Activation function.
+            reuse: (bool) whether to reuse the weights of a previous layer by the same name.
+            name: Name of the module
+        Raises:
+            ValueError: If data_format is not 'channels_first' or 'channels_last'
+        """
         super(ConvRNNCell, self).__init__(_reuse=reuse, name=name)
         self._input_shape = input_shape
         self._output_channels = output_channels
@@ -61,6 +74,21 @@ class ConvGRUCell(tf.nn.rnn_cell.RNNCell):
                  normalize=True,
                  data_format='channels_last',
                  reuse=None):
+        """Construct ConvGRUCell.
+
+        Args:
+            input_shape: (int, int, int) Shape of the input as int tuple, excluding the batch size
+            output_channels: (int) number of output channels of the conv LSTM
+            kernel_shape: (int, int) Shape of kernel as in tuple of size 2
+            activation: Activation function.
+            normalize: (bool) whether to layer normalize the conv output
+            data_format: A string, one of 'channels_last' (default) or 'channels_first'. The ordering of the dimensions in
+                the inputs. channels_last corresponds to inputs with shape (batch, height, width, channels) while
+                channels_first corresponds to inputs with shape (batch, channels, height, width)
+            reuse: (bool) whether to reuse the weights of a previous layer by the same name.
+        Raises:
+            ValueError: If data_format is not 'channels_first' or 'channels_last'
+        """
         super(ConvGRUCell, self).__init__(_reuse=reuse)
         self._filters = output_channels
         self._kernel = kernel_shape
@@ -138,16 +166,22 @@ class MyConv2DLSTMCell(tf.nn.rnn_cell.RNNCell):
                  reuse=None,
                  name="conv_2d_lstm_cell"):
         """Construct Conv2DLSTMCell.
-            Args:
-                input_shape: Shape of the input as int tuple, excluding the batch size.
-                output_channels: int, number of output channels of the conv LSTM.
-                kernel_shape: Shape of kernel as in tuple of size 2).
-                forget_bias: Forget bias.
-                name: Name of the module.
-            Raises:
-                ValueError: If `skip_connection` is `True` and stride is different from 1
-                    or if `input_shape` is incompatible with `conv_ndims`.
-            """
+
+        Args:
+            input_shape: (int, int, int) Shape of the input as int tuple, excluding the batch size
+            output_channels: (int) number of output channels of the conv LSTM
+            kernel_shape: (int, int) Shape of kernel as in tuple of size 2
+            use_bias: (bool) whether the convolutions use biases
+            forget_bias: (float) Forget bias
+            activation: Activation function.
+            data_format: A string, one of 'channels_last' (default) or 'channels_first'. The ordering of the dimensions in
+                the inputs. channels_last corresponds to inputs with shape (batch, height, width, channels) while
+                channels_first corresponds to inputs with shape (batch, channels, height, width)
+            reuse: (bool) whether to reuse the weights of a previous layer by the same name.
+            name: Name of the module
+        Raises:
+            ValueError: If data_format is not 'channels_first' or 'channels_last'
+        """
         super(MyConv2DLSTMCell, self).__init__(_reuse=reuse, name=name)
 
         self._input_shape = input_shape

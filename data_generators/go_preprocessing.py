@@ -141,8 +141,7 @@ def format_example_cnn(example, hp):
 
     def format_input_cnn(elem):
         """Format a single position with shape [history_length, board_size, board_size] to
-        [history_length*2+1, board_size, board_size].
-        """
+        [history_length*2+1, board_size, board_size]."""
         position, player = elem
 
         # unstack at first dimension
