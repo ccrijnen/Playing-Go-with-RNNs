@@ -410,7 +410,7 @@ class MyConvRNNModel(GoModelRNN):
         rnn_ins = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
 
         cell = rnn_cells.ConvRNNCell(input_shape=[hp.num_filters, board_size, board_size],
-                                     output_channels=hp.num_dense_filter,
+                                     output_channels=hp.num_filters,
                                      kernel_shape=[3, 3],
                                      activation=tf.nn.relu)
 
@@ -448,7 +448,7 @@ class MyConvLSTMModel(GoModelRNN):
 
         cell = tf.contrib.rnn.Conv2DLSTMCell(input_shape=[board_size, board_size, hp.num_filters],
                                              kernel_shape=[3, 3],
-                                             output_channels=hp.num_dense_filter,
+                                             output_channels=hp.num_filters,
                                              use_bias=False,
                                              skip_connection=False)
 
@@ -486,7 +486,7 @@ class MyConvGRUModel(GoModelRNN):
 
         cell = rnn_cells.ConvGRUCell(input_shape=[board_size, board_size],
                                      kernel_shape=[3, 3],
-                                     output_channels=hp.num_dense_filter,
+                                     output_channels=hp.num_filters,
                                      normalize=True,
                                      data_format='channels_first')
 
