@@ -65,7 +65,7 @@ class DatasetStats:
         if self.sort_sequence_by_color and mode == "rnn":
             mode += "_sorted"
         if hasattr(self.hparams, "split") and self.hparams.split_to_min_length and mode == "cnn":
-            mode += "_split_to_min_length"
+            mode += "_split"
 
         return self.sizes[mode]
 
@@ -107,7 +107,7 @@ class DatasetStats:
         tf.logging.info("Generating dataset_params{} in data dir with min_length {:03}{}"
                         .format(self.suffix, min_length, max_str))
 
-        modes = ['rnn', 'rnn_sorted', 'cnn', 'cnn_split_to_min_length']
+        modes = ['rnn', 'rnn_sorted', 'cnn', 'cnn_split']
 
         mode_to_stat = {
             'rnn': lambda x: len(x),
