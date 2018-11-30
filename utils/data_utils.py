@@ -113,7 +113,7 @@ class DatasetStats:
             'rnn': lambda x: len(x),
             'rnn_sorted': lambda x: 2 * len(x),
             'cnn': lambda x: np.sum(x),
-            'cnn_split_to_min_length': lambda x: len(x) * min_length
+            'cnn_split': lambda x: len(x) * min_length
         }
 
         if hasattr(self, 'sizes'):
