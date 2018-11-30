@@ -390,7 +390,7 @@ def static_rnn(cell, inputs, init_state, min_length, name):
     return rnn_outputs
 
 
-class MyConvRNNModel(GoModelRNN):
+class MyConvRNNModel(GoModelConvRNN):
     """Model as in AlphaGo Zero paper but replacing last residual block with a Conv RNN layer
     statically unrolled using only the first min_length positions."""
     def body(self, features):
@@ -426,7 +426,7 @@ class MyConvRNNModel(GoModelRNN):
         return rnn_outputs
 
 
-class MyConvLSTMModel(GoModelRNN):
+class MyConvLSTMModel(GoModelConvRNN):
     """Model as in AlphaGo Zero paper but replacing last residual block with a Conv LSTM RNN layer
     statically unrolled using only the first min_length positions."""
     def body(self, features):
@@ -465,7 +465,7 @@ class MyConvLSTMModel(GoModelRNN):
         return rnn_outputs
 
 
-class MyConvGRUModel(GoModelRNN):
+class MyConvGRUModel(GoModelConvRNN):
     """Model as in AlphaGo Zero paper but replacing last residual block with a Conv GRU RNN layer
     statically unrolled using only the first min_length positions."""
     def body(self, features):
