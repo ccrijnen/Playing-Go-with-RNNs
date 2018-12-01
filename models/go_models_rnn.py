@@ -472,6 +472,7 @@ class MyConvGRUModel(GoModelConvRNN):
         hp = self.hparams
         board_size = hp.board_size
 
+        game_length = features["game_length"]
         inputs = features["inputs"]
         inputs = tf.reshape(inputs, [-1, 3, board_size, board_size])
 
@@ -482,7 +483,8 @@ class MyConvGRUModel(GoModelConvRNN):
             with tf.variable_scope("residual_block_{}".format(i+1)):
                 out = self.residual_block(out)
 
-        rnn_ins = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
+        rnn_ins = tf.reshape(out, [-1, hp.min_length, hp.num_filters, board_size, board_size])
+        rnn_ins = tf.unstack(rnn_ins, hp.min_length, axis=1)
 
         cell = rnn_cells.ConvGRUCell(input_shape=[board_size, board_size],
                                      kernel_shape=[3, 3],
@@ -490,13 +492,16 @@ class MyConvGRUModel(GoModelConvRNN):
                                      normalize=True,
                                      data_format='channels_first')
 
-        init_state = cell.zero_state(hp.batch_size, tf.float32)
+        # init_state = cell.zero_state(hp.batch_size, tf.float32)
 
-        rnn_outputs = static_rnn(cell, rnn_ins, init_state, hp.min_length, "conv_gru")
+        with tf.variable_scope("conv_gru"):
+            rnn_outputs, _ = tf.nn.static_rnn(cell, rnn_ins, dtype=tf.float32, sequence_length=game_length)
 
-        self.max_game_length = hp.min_length
-        features["game_length"] = tf.constant([hp.min_length] * hp.batch_size, tf.int64)
-        features["p_targets"] = features["p_targets"][:, :hp.min_length]
-        features["v_targets"] = features["v_targets"][:, :hp.min_length]
-        features["legal_moves"] = features["legal_moves"][:, :hp.min_length]
+        rnn_outputs = tf.stack(rnn_outputs, axis=1)
+
+        # self.max_game_length = hp.min_length
+        # features["game_length"] = tf.constant([hp.min_length] * hp.batch_size, tf.int64)
+        # features["p_targets"] = features["p_targets"][:, :hp.min_length]
+        # features["v_targets"] = features["v_targets"][:, :hp.min_length]
+        # features["legal_moves"] = features["legal_moves"][:, :hp.min_length]
         return rnn_outputs
