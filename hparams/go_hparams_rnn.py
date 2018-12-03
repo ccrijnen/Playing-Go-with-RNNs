@@ -17,7 +17,7 @@ def base_go_hparams_rnn():
 
         # During training, we drop sequences whose inputs and targets are shorter
         # than min_length
-        min_length=150,
+        min_length=50,
 
         split_to_min_length=False,
 
