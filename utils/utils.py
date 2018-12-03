@@ -41,12 +41,19 @@ def save_dict_to_json(d, json_path):
 def save_dicts_to_json(dicts, json_path):
     """Saves multiple dicts of ints in json file
     Args:
-        dicts: (dict) of (dict) of int-castable values (np.float, int, float, etc.)
+        dicts: (dict) of (dict)'s of int-castable values (np.float, int, float, etc.)
         json_path: (string) path to json file
     """
+    def dict_recursion(inputs):
+        if isinstance(inputs, dict):
+            for k, d in inputs.items():
+                v = dict_recursion(d)
+                inputs[k] = v
+            return inputs
+        else:
+            return int(inputs)
+
     with open(json_path, 'w') as f:
         # We need to convert the values to int for json (it doesn't accept np.array, np.float, )
-        for k, d in dicts.items():
-            d = {kk: int(v) for kk, v in d.items()}
-            dicts[k] = d
+        dicts = dict_recursion(dicts)
         json.dump(dicts, f, indent=4)

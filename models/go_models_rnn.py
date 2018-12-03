@@ -90,7 +90,7 @@ class GoModelRNN(GoModel):
 
 
 class VanillaRNNModel(GoModelRNN):
-    """Model as in AlphaGo Zero paper but replacing last residual block with a vanilla RNN layer."""
+    """Model as in AlphaGo Zero paper but adding a vanilla RNN layer."""
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size
@@ -121,7 +121,7 @@ class VanillaRNNModel(GoModelRNN):
 
 
 class LSTMModel(GoModelRNN):
-    """Model as in AlphaGo Zero paper but replacing last residual block with a LSTM RNN layer."""
+    """Model as in AlphaGo Zero paper but adding a LSTM RNN layer."""
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size
@@ -152,7 +152,7 @@ class LSTMModel(GoModelRNN):
 
 
 class GRUModel(GoModelRNN):
-    """Model as in AlphaGo Zero paper but replacing last residual block with a GRU RNN layer."""
+    """Model as in AlphaGo Zero paper but adding a GRU RNN layer."""
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size
@@ -268,7 +268,7 @@ class GoModelConvRNN(GoModel):
 
 
 class ConvRNNModel(GoModelConvRNN):
-    """Model as in AlphaGo Zero paper but replacing last residual block with a Conv RNN layer."""
+    """Model as in AlphaGo Zero paper but adding a Conv RNN layer."""
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size
@@ -298,7 +298,7 @@ class ConvRNNModel(GoModelConvRNN):
 
 
 class ConvLSTMModel(GoModelConvRNN):
-    """Model as in AlphaGo Zero paper but replacing last residual block with a Conv LSTM RNN layer."""
+    """Model as in AlphaGo Zero paper but adding a Conv LSTM RNN layer."""
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size
@@ -332,7 +332,7 @@ class ConvLSTMModel(GoModelConvRNN):
 
 
 class ConvGRUModel(GoModelConvRNN):
-    """Model as in AlphaGo Zero paper but replacing last residual block with a Conv GRU RNN layer."""
+    """Model as in AlphaGo Zero paper but adding a Conv GRU RNN layer."""
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size
@@ -391,8 +391,8 @@ def static_rnn(cell, inputs, init_state, min_length, name):
 
 
 class MyConvRNNModel(GoModelRNN):
-    """Model as in AlphaGo Zero paper but replacing last residual block with a Conv RNN layer
-    statically unrolled using only the first min_length positions."""
+    """Model as in AlphaGo Zero paper but adding a Conv RNN layer statically unrolled using only the first
+    min_length positions."""
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size
@@ -422,8 +422,8 @@ class MyConvRNNModel(GoModelRNN):
 
 
 class MyConvLSTMModel(GoModelRNN):
-    """Model as in AlphaGo Zero paper but replacing last residual block with a Conv LSTM RNN layer
-    statically unrolled using only the first min_length positions."""
+    """Model as in AlphaGo Zero paper but adding a Conv LSTM RNN layer statically unrolled using only the first
+    min_length positions."""
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size
@@ -456,8 +456,8 @@ class MyConvLSTMModel(GoModelRNN):
 
 
 class MyConvGRUModel(GoModelRNN):
-    """Model as in AlphaGo Zero paper but replacing last residual block with a Conv GRU RNN layer
-    statically unrolled using only the first min_length positions."""
+    """Model as in AlphaGo Zero paper but adding a Conv GRU RNN layer statically unrolled using only the first
+    min_length positions."""
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size

@@ -96,6 +96,7 @@ class DatasetStats:
                 self.sizes[mode] = sizes[mode]
         else:
             self.create_sizes()
+            self.save_dataset_stats()
 
     def create_sizes(self):
         hp = self.hparams
@@ -158,6 +159,77 @@ class DatasetStats:
         utils.save_dicts_to_json(self.sizes, file_out)
 
         self.print_stats()
+
+    def save_dataset_stats(self):
+        problem = self.problem
+        hp = self.hparams
+
+        data_dir = hp.data_dir
+        min_length = hp.min_length if hasattr(hp, "min_length") else 0
+        max_length = hp.max_length if hasattr(hp, "max_length") else 0
+
+        splits = {
+            'train': DatasetSplit.TRAIN,
+            'dev': DatasetSplit.EVAL,
+            'test': DatasetSplit.TEST,
+        }
+
+        total_gogod = []
+        total_kgs = []
+
+        output = {}
+
+        for split, dataset_split in splits.items():
+            gogod = []
+            kgs = []
+
+            data_filepattern = problem.filepattern(data_dir, dataset_split)
+            data_files = sorted(tf.contrib.slim.parallel_reader.get_data_files(data_filepattern))
+
+            for file in data_files:
+                record_iterator = tf.python_io.tf_record_iterator(path=file)
+
+                for string_record in record_iterator:
+                    example = tf.train.Example()
+                    example.ParseFromString(string_record)
+
+                    dataset_name = str(example.features.feature['dataset_name'].bytes_list.value[0])
+                    game_length = int(example.features.feature['game_length'].int64_list.value[0])
+
+                    if (min_length <= game_length <= max_length) or (min_length <= game_length and not max_length):
+                        if 'gogod' in dataset_name.lower():
+                            gogod.append(game_length)
+                        elif 'kgs' in dataset_name.lower():
+                            kgs.append(game_length)
+
+            output[split] = {
+                'gogod': {
+                    'games': len(gogod),
+                    'positions': sum(gogod)
+                },
+                'kgs': {
+                    'games': len(kgs),
+                    'positions': sum(kgs)
+                }
+            }
+
+            total_gogod += gogod
+            total_kgs += kgs
+
+        output['total'] = {
+            'gogod': {
+                'games': len(total_gogod),
+                'positions': sum(total_gogod)
+            },
+            'kgs': {
+                'games': len(total_kgs),
+                'positions': sum(total_kgs)
+            }
+        }
+
+        max_str = "-{:03}".format(max_length) if max_length else ""
+        file_out = os.path.join(data_dir, 'dataset_stats{}_{:03}{}.json'.format(self.suffix, min_length, max_str))
+        utils.save_dicts_to_json(output, file_out)
 
 
 def example_length(example):
