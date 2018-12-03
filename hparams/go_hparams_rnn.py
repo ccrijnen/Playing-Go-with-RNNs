@@ -40,7 +40,12 @@ def base_go_hparams_rnn():
         value_loss_weight=0.01,
         sgd_momentum=0.9,
 
-        lr_boundaries=[35000, 70000, 105000, 122500],
+        # min_length = 150:
+        # lr_boundaries=[35000, 70000, 105000, 122500],
+
+        # min_length = 50:
+        lr_boundaries=[43750, 87500, 131250, 153125],
+
         lr_rates=[1e-1, 1e-2, 1e-3, 1e-4, 1e-5],
     )
 

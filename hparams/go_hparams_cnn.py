@@ -65,7 +65,11 @@ def go_hparams_19_cnn_split():
         'use_kgs_data': True,
         'split_to_min_length': True,
 
-        'lr_boundaries': [160000, 320000, 480000, 560000],
+        # min_length = 150:
+        # 'lr_boundaries': [160000, 320000, 480000, 560000],
+
+        # min_length = 50:
+        'lr_boundaries': [67500, 135000, 202500, 236250],
     }
 
     hp.override_from_dict(hp_dict)
