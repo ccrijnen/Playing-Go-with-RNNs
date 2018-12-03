@@ -19,7 +19,7 @@ class GoModelRNN(GoModel):
 
         legal_moves = features["legal_moves"]
 
-        body_output = tf.reshape(body_output, [-1, hp.num_dense_filter, board_size, board_size])
+        body_output = tf.reshape(body_output, [-1, hp.num_dense_filters, board_size, board_size])
 
         # Policy Head
         with tf.variable_scope('policy_head'):
@@ -109,13 +109,13 @@ class VanillaRNNModel(GoModelRNN):
             rnn_in = tf.reshape(out, [-1, self.max_game_length, hp.num_filters * board_size * board_size])
             rnn_in = tf.transpose(rnn_in, [1, 0, 2])
 
-            num_units = hp.num_dense_filter * board_size * board_size
+            num_units = hp.num_dense_filters * board_size * board_size
             rnn = tf.contrib.cudnn_rnn.CudnnRNNTanh(num_layers=1, num_units=num_units)
             rnn_outputs, _ = rnn(rnn_in)
 
             rnn_outputs = tf.transpose(rnn_outputs, [1, 0, 2])
             rnn_outputs = tf.reshape(rnn_outputs,
-                                     [-1, self.max_game_length, hp.num_dense_filter, board_size, board_size])
+                                     [-1, self.max_game_length, hp.num_dense_filters, board_size, board_size])
 
         return rnn_outputs
 
@@ -140,13 +140,13 @@ class LSTMModel(GoModelRNN):
             rnn_in = tf.reshape(out, [-1, self.max_game_length, hp.num_filters * board_size * board_size])
             rnn_in = tf.transpose(rnn_in, [1, 0, 2])
 
-            num_units = hp.num_dense_filter * board_size * board_size
+            num_units = hp.num_dense_filters * board_size * board_size
             lstm = tf.contrib.cudnn_rnn.CudnnLSTM(num_layers=1, num_units=num_units)
             rnn_outputs, _ = lstm(rnn_in)
 
             rnn_outputs = tf.transpose(rnn_outputs, [1, 0, 2])
             rnn_outputs = tf.reshape(rnn_outputs,
-                                     [-1, self.max_game_length, hp.num_dense_filter, board_size, board_size])
+                                     [-1, self.max_game_length, hp.num_dense_filters, board_size, board_size])
 
         return rnn_outputs
 
@@ -171,13 +171,13 @@ class GRUModel(GoModelRNN):
             rnn_in = tf.reshape(out, [-1, self.max_game_length, hp.num_filters * board_size * board_size])
             rnn_in = tf.transpose(rnn_in, [1, 0, 2])
 
-            num_units = hp.num_dense_filter * board_size * board_size
+            num_units = hp.num_dense_filters * board_size * board_size
             gru = tf.contrib.cudnn_rnn.CudnnGRU(num_layers=1, num_units=num_units)
             rnn_outputs, _ = gru(rnn_in)
 
             rnn_outputs = tf.transpose(rnn_outputs, [1, 0, 2])
             rnn_outputs = tf.reshape(rnn_outputs,
-                                     [-1, self.max_game_length, hp.num_dense_filter, board_size, board_size])
+                                     [-1, self.max_game_length, hp.num_dense_filters, board_size, board_size])
 
         return rnn_outputs
 
@@ -410,7 +410,7 @@ class MyConvRNNModel(GoModelRNN):
         rnn_ins = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
 
         cell = rnn_cells.ConvRNNCell(input_shape=[hp.num_filters, board_size, board_size],
-                                     output_channels=hp.num_dense_filter,
+                                     output_channels=hp.num_dense_filters,
                                      kernel_shape=[3, 3],
                                      activation=tf.nn.relu)
 
@@ -443,7 +443,7 @@ class MyConvLSTMModel(GoModelRNN):
 
         cell = tf.contrib.rnn.Conv2DLSTMCell(input_shape=[board_size, board_size, hp.num_filters],
                                              kernel_shape=[3, 3],
-                                             output_channels=hp.num_dense_filter,
+                                             output_channels=hp.num_dense_filters,
                                              use_bias=False,
                                              skip_connection=False)
 
@@ -476,7 +476,7 @@ class MyConvGRUModel(GoModelRNN):
 
         cell = rnn_cells.ConvGRUCell(input_shape=[board_size, board_size],
                                      kernel_shape=[3, 3],
-                                     output_channels=hp.num_dense_filter,
+                                     output_channels=hp.num_dense_filters,
                                      normalize=True,
                                      data_format='channels_first')
 

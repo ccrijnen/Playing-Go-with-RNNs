@@ -26,7 +26,7 @@ def base_go_hparams_cnn():
 
         # only used in cnn models with a dense layer
         # num filters to reshape the dense output to
-        num_dense_filter=2,
+        num_dense_filters=2,
 
         # trainer settings
         num_epochs=1,

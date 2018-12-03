@@ -27,7 +27,7 @@ def base_go_hparams_rnn():
 
         # used in rnn models not using a conv cell
         # num filters to reshape the dense output to
-        num_dense_filter=2,
+        num_dense_filters=2,
 
         # trainer settings
         num_epochs=1,

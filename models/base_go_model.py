@@ -99,7 +99,7 @@ class GoModel(object):
         return output
 
     def conv_block_out(self, inputs):
-        """Conv block for output to num_dense_filter channels.
+        """Conv block for output to num_dense_filters channels.
 
         Args:
             inputs: (tf.Tensor) input of the dense block
@@ -136,7 +136,7 @@ class GoModel(object):
         dense_output = self.my_batchnorm(dense_output, axis=-1, training=is_training)
         dense_output = tf.nn.relu(dense_output)
 
-        dense_output = tf.reshape(dense_output, [-1, hp.num_dense_filter, board_size, board_size])
+        dense_output = tf.reshape(dense_output, [-1, hp.num_dense_filters, board_size, board_size])
 
         return dense_output
 
