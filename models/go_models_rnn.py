@@ -99,7 +99,7 @@ class VanillaRNNModel(GoModelRNN):
         inputs = tf.reshape(inputs, [-1, 3, board_size, board_size])
 
         with tf.variable_scope("conv_block"):
-            out = self.conv_block(inputs)
+            out = self.conv_block_in(inputs)
 
         for i in range(hp.num_res_blocks):
             with tf.variable_scope("residual_block_{}".format(i+1)):
@@ -130,7 +130,7 @@ class LSTMModel(GoModelRNN):
         inputs = tf.reshape(inputs, [-1, 3, board_size, board_size])
 
         with tf.variable_scope("conv_block"):
-            out = self.conv_block(inputs)
+            out = self.conv_block_in(inputs)
 
         for i in range(hp.num_res_blocks):
             with tf.variable_scope("residual_block_{}".format(i+1)):
@@ -161,7 +161,7 @@ class GRUModel(GoModelRNN):
         inputs = tf.reshape(inputs, [-1, 3, board_size, board_size])
 
         with tf.variable_scope("conv_block"):
-            out = self.conv_block(inputs)
+            out = self.conv_block_in(inputs)
 
         for i in range(hp.num_res_blocks):
             with tf.variable_scope("residual_block_{}".format(i+1)):
@@ -278,7 +278,7 @@ class ConvRNNModel(GoModelConvRNN):
         inputs = tf.reshape(inputs, [-1, 3, board_size, board_size])
 
         with tf.variable_scope("conv_block"):
-            out = self.conv_block(inputs)
+            out = self.conv_block_in(inputs)
 
         for i in range(hp.num_res_blocks):
             with tf.variable_scope("residual_block_{}".format(i+1)):
@@ -308,7 +308,7 @@ class ConvLSTMModel(GoModelConvRNN):
         inputs = tf.reshape(inputs, [-1, 3, board_size, board_size])
 
         with tf.variable_scope("conv_block"):
-            out = self.conv_block(inputs)
+            out = self.conv_block_in(inputs)
 
         for i in range(hp.num_res_blocks):
             with tf.variable_scope("residual_block_{}".format(i + 1)):
@@ -342,7 +342,7 @@ class ConvGRUModel(GoModelConvRNN):
         inputs = tf.reshape(inputs, [-1, 3, board_size, board_size])
 
         with tf.variable_scope("conv_block"):
-            out = self.conv_block(inputs)
+            out = self.conv_block_in(inputs)
 
         for i in range(hp.num_res_blocks):
             with tf.variable_scope("residual_block_{}".format(i+1)):
@@ -390,7 +390,7 @@ def static_rnn(cell, inputs, init_state, min_length, name):
     return rnn_outputs
 
 
-class MyConvRNNModel(GoModelConvRNN):
+class MyConvRNNModel(GoModelRNN):
     """Model as in AlphaGo Zero paper but replacing last residual block with a Conv RNN layer
     statically unrolled using only the first min_length positions."""
     def body(self, features):
@@ -401,7 +401,7 @@ class MyConvRNNModel(GoModelConvRNN):
         inputs = tf.reshape(inputs, [-1, 3, board_size, board_size])
 
         with tf.variable_scope("conv_block"):
-            out = self.conv_block(inputs)
+            out = self.conv_block_in(inputs)
 
         for i in range(hp.num_res_blocks):
             with tf.variable_scope("residual_block_{}".format(i+1)):
@@ -410,7 +410,7 @@ class MyConvRNNModel(GoModelConvRNN):
         rnn_ins = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
 
         cell = rnn_cells.ConvRNNCell(input_shape=[hp.num_filters, board_size, board_size],
-                                     output_channels=hp.num_filters,
+                                     output_channels=hp.num_dense_filter,
                                      kernel_shape=[3, 3],
                                      activation=tf.nn.relu)
 
@@ -418,15 +418,10 @@ class MyConvRNNModel(GoModelConvRNN):
 
         rnn_outputs = static_rnn(cell, rnn_ins, init_state, hp.min_length, "conv_rnn")
 
-        self.max_game_length = hp.min_length
-        features["game_length"] = tf.constant([hp.min_length] * hp.batch_size, tf.int64)
-        features["p_targets"] = features["p_targets"][:, :hp.min_length]
-        features["v_targets"] = features["v_targets"][:, :hp.min_length]
-        features["legal_moves"] = features["legal_moves"][:, :hp.min_length]
         return rnn_outputs
 
 
-class MyConvLSTMModel(GoModelConvRNN):
+class MyConvLSTMModel(GoModelRNN):
     """Model as in AlphaGo Zero paper but replacing last residual block with a Conv LSTM RNN layer
     statically unrolled using only the first min_length positions."""
     def body(self, features):
@@ -437,71 +432,56 @@ class MyConvLSTMModel(GoModelConvRNN):
         inputs = tf.reshape(inputs, [-1, 3, board_size, board_size])
 
         with tf.variable_scope("conv_block"):
-            out = self.conv_block(inputs)
+            out = self.conv_block_in(inputs)
 
         for i in range(hp.num_res_blocks):
             with tf.variable_scope("residual_block_{}".format(i+1)):
                 out = self.residual_block(out)
 
-        rnn_in = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
-        rnn_in = tf.transpose(rnn_in, perm=[0, 1, 3, 4, 2])
+        rnn_ins = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
+        rnn_ins = tf.transpose(rnn_ins, perm=[0, 1, 3, 4, 2])
 
         cell = tf.contrib.rnn.Conv2DLSTMCell(input_shape=[board_size, board_size, hp.num_filters],
                                              kernel_shape=[3, 3],
-                                             output_channels=hp.num_filters,
+                                             output_channels=hp.num_dense_filter,
                                              use_bias=False,
                                              skip_connection=False)
 
         init_state = cell.zero_state(hp.batch_size, tf.float32)
 
-        rnn_outputs = static_rnn(cell, rnn_in, init_state, hp.min_length, "my_conv_lstm")
+        rnn_outputs = static_rnn(cell, rnn_ins, init_state, hp.min_length, "my_conv_lstm")
         rnn_outputs = tf.transpose(rnn_outputs, perm=[0, 1, 4, 2, 3])
 
-        self.max_game_length = hp.min_length
-        features["game_length"] = tf.constant([hp.min_length] * hp.batch_size, tf.int64)
-        features["p_targets"] = features["p_targets"][:, :hp.min_length]
-        features["v_targets"] = features["v_targets"][:, :hp.min_length]
-        features["legal_moves"] = features["legal_moves"][:, :hp.min_length]
         return rnn_outputs
 
 
-class MyConvGRUModel(GoModelConvRNN):
+class MyConvGRUModel(GoModelRNN):
     """Model as in AlphaGo Zero paper but replacing last residual block with a Conv GRU RNN layer
     statically unrolled using only the first min_length positions."""
     def body(self, features):
         hp = self.hparams
         board_size = hp.board_size
 
-        game_length = features["game_length"]
         inputs = features["inputs"]
         inputs = tf.reshape(inputs, [-1, 3, board_size, board_size])
 
         with tf.variable_scope("conv_block"):
-            out = self.conv_block(inputs)
+            out = self.conv_block_in(inputs)
 
         for i in range(hp.num_res_blocks):
             with tf.variable_scope("residual_block_{}".format(i+1)):
                 out = self.residual_block(out)
 
         rnn_ins = tf.reshape(out, [-1, hp.min_length, hp.num_filters, board_size, board_size])
-        rnn_ins = tf.unstack(rnn_ins, hp.min_length, axis=1)
 
         cell = rnn_cells.ConvGRUCell(input_shape=[board_size, board_size],
                                      kernel_shape=[3, 3],
-                                     output_channels=hp.num_filters,
+                                     output_channels=hp.num_dense_filter,
                                      normalize=True,
                                      data_format='channels_first')
 
-        # init_state = cell.zero_state(hp.batch_size, tf.float32)
+        init_state = cell.zero_state(hp.batch_size, tf.float32)
 
-        with tf.variable_scope("conv_gru"):
-            rnn_outputs, _ = tf.nn.static_rnn(cell, rnn_ins, dtype=tf.float32, sequence_length=game_length)
+        rnn_outputs = static_rnn(cell, rnn_ins, init_state, hp.min_length, "my_conv_gru")
 
-        rnn_outputs = tf.stack(rnn_outputs, axis=1)
-
-        # self.max_game_length = hp.min_length
-        # features["game_length"] = tf.constant([hp.min_length] * hp.batch_size, tf.int64)
-        # features["p_targets"] = features["p_targets"][:, :hp.min_length]
-        # features["v_targets"] = features["v_targets"][:, :hp.min_length]
-        # features["legal_moves"] = features["legal_moves"][:, :hp.min_length]
         return rnn_outputs

@@ -23,7 +23,7 @@ def base_go_hparams_rnn():
 
         # model settings
         num_filters=256,
-        num_res_blocks=8,
+        num_res_blocks=9,
 
         # used in rnn models not using a conv cell
         # num filters to reshape the dense output to

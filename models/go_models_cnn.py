@@ -82,12 +82,15 @@ class AlphaZeroModel(GoModelCNN):
         hp = self.hparams
         inputs = features["inputs"]
 
-        with tf.variable_scope("conv_block"):
-            out = self.conv_block(inputs)
+        with tf.variable_scope("conv_block_in"):
+            out = self.conv_block_in(inputs)
 
         for i in range(hp.num_res_blocks):
             with tf.variable_scope("residual_block_{}".format(i + 1)):
                 out = self.residual_block(out)
+
+        with tf.variable_scope("conv_block_out"):
+            out = self.conv_block_out(out)
 
         return out
 
@@ -99,15 +102,13 @@ class AlphaZeroModelDense(GoModelCNN):
         inputs = features["inputs"]
 
         with tf.variable_scope("conv_block"):
-            out = self.conv_block(inputs)
+            out = self.conv_block_in(inputs)
 
-        for i in range(hp.num_res_blocks - 1):
+        for i in range(hp.num_res_blocks):
             with tf.variable_scope("residual_block_{}".format(i + 1)):
                 out = self.residual_block(out)
 
-        board_size = hp.board_size
-        out = tf.reshape(out, [-1, hp.num_filters * board_size * board_size])
-        out = tf.layers.dense(out, hp.num_dense_filter * board_size * board_size)
-        out = tf.reshape(out, [-1, hp.num_dense_filter, board_size, board_size])
+        with tf.variable_scope("dense_block"):
+            out = self.dense_block(out)
 
         return out
