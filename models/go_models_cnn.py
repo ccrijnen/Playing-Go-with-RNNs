@@ -89,9 +89,6 @@ class AlphaZeroModel(GoModelCNN):
             with tf.variable_scope("residual_block_{}".format(i + 1)):
                 out = self.residual_block(out)
 
-        with tf.variable_scope("conv_block_out"):
-            out = self.conv_block_out(out)
-
         return out
 
 
@@ -104,7 +101,7 @@ class AlphaZeroModelDense(GoModelCNN):
         with tf.variable_scope("conv_block"):
             out = self.conv_block_in(inputs)
 
-        for i in range(hp.num_res_blocks):
+        for i in range(hp.num_res_blocks - 1):
             with tf.variable_scope("residual_block_{}".format(i + 1)):
                 out = self.residual_block(out)
 
