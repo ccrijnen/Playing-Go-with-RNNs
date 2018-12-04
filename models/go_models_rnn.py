@@ -416,7 +416,7 @@ class MyConvRNNModel(GoModelRNN):
 
         init_state = cell.zero_state(hp.batch_size, tf.float32)
 
-        rnn_outputs = static_rnn(cell, rnn_ins, init_state, hp.min_length, "conv_rnn")
+        rnn_outputs = static_rnn(cell, rnn_ins, init_state, hp.min_length, "my_conv_rnn")
 
         return rnn_outputs
 
@@ -483,5 +483,11 @@ class MyConvGRUModel(GoModelRNN):
         init_state = cell.zero_state(hp.batch_size, tf.float32)
 
         rnn_outputs = static_rnn(cell, rnn_ins, init_state, hp.min_length, "my_conv_gru")
+
+        self.max_game_length = hp.min_length
+        features["game_length"] = tf.constant([hp.min_length] * hp.batch_size, tf.int64)
+        features["p_targets"] = features["p_targets"][:, :hp.min_length]
+        features["v_targets"] = features["v_targets"][:, :hp.min_length]
+        features["legal_moves"] = features["legal_moves"][:, :hp.min_length]
 
         return rnn_outputs

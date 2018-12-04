@@ -8,11 +8,11 @@ def base_go_hparams_cnn():
         tmp_dir="./data/tmp/",
 
         use_gogod_data=True,
-        use_kgs_data=False,
+        use_kgs_data=True,
 
         # During training, we drop sequences whose inputs and targets are shorter
         # than min_length
-        min_length=50,
+        min_length=150,
 
         split_to_min_length=False,
 
@@ -46,14 +46,6 @@ def base_go_hparams_cnn():
 
 def go_hparams_19_cnn():
     hp = base_go_hparams_cnn()
-
-    hp_dict = {
-        'use_gogod_data': True,
-        'use_kgs_data': True,
-    }
-
-    hp.override_from_dict(hp_dict)
-
     return hp
 
 
@@ -61,15 +53,13 @@ def go_hparams_19_cnn_split():
     hp = base_go_hparams_cnn()
 
     hp_dict = {
-        'use_gogod_data': True,
-        'use_kgs_data': True,
         'split_to_min_length': True,
 
         # min_length = 150:
-        # 'lr_boundaries': [160000, 320000, 480000, 560000],
+        'lr_boundaries': [160000, 320000, 480000, 560000],
 
         # min_length = 50:
-        'lr_boundaries': [67500, 135000, 202500, 236250],
+        # 'lr_boundaries': [67500, 135000, 202500, 236250],
     }
 
     hp.override_from_dict(hp_dict)
