@@ -472,7 +472,7 @@ class MyConvGRUModel(GoModelRNN):
             with tf.variable_scope("residual_block_{}".format(i+1)):
                 out = self.residual_block(out)
 
-        rnn_ins = tf.reshape(out, [-1, hp.min_length, hp.num_filters, board_size, board_size])
+        rnn_ins = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
 
         cell = rnn_cells.ConvGRUCell(input_shape=[board_size, board_size],
                                      kernel_shape=[3, 3],
