@@ -5,6 +5,30 @@ from models.base_go_model import GoModel
 
 class GoModelCNN(GoModel):
     """Base CNN Go Model."""
+    def dense_block(self, inputs):
+        """Dense block.
+
+        Args:
+            inputs: (tf.Tensor) input of the dense block
+        Returns:
+            (tf.Tensor) output of the conv block
+        """
+        hp = self._hparams
+
+        is_training = hp.mode == tf.estimator.ModeKeys.TRAIN
+        board_size = hp.board_size
+
+        inputs = tf.reshape(inputs, [-1, hp.num_filters * board_size * board_size])
+
+        with tf.variable_scope('dense_block'):
+            dense_output = tf.layers.dense(inputs, hp.num_dense_filters * board_size * board_size)
+            dense_output = self.my_batchnorm(dense_output, axis=-1, training=is_training)
+            dense_output = tf.nn.relu(dense_output)
+
+        dense_output = tf.reshape(dense_output, [-1, hp.num_dense_filters, board_size, board_size])
+
+        return dense_output
+
     def bottom(self, features):
         return features
 
