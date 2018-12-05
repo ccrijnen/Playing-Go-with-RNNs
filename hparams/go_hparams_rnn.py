@@ -17,7 +17,7 @@ def base_go_hparams_rnn():
 
         # During training, we drop sequences whose inputs and targets are shorter
         # than min_length
-        min_length=150,
+        min_length=50,
 
         split_to_min_length=False,
 
@@ -41,10 +41,10 @@ def base_go_hparams_rnn():
         sgd_momentum=0.9,
 
         # min_length = 150:
-        lr_boundaries=[35000, 70000, 105000, 122500],
+        # lr_boundaries=[35000, 70000, 105000, 122500],
 
         # min_length = 50:
-        # lr_boundaries=[43750, 87500, 131250, 153125],
+        lr_boundaries=[43750, 87500, 131250, 153125],
 
         lr_rates=[1e-1, 1e-2, 1e-3, 1e-4, 1e-5],
     )

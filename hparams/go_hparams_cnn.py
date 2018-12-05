@@ -12,7 +12,7 @@ def base_go_hparams_cnn():
 
         # During training, we drop sequences whose inputs and targets are shorter
         # than min_length
-        min_length=150,
+        min_length=50,
 
         split_to_min_length=False,
 
@@ -56,10 +56,10 @@ def go_hparams_19_cnn_split():
         'split_to_min_length': True,
 
         # min_length = 150:
-        'lr_boundaries': [160000, 320000, 480000, 560000],
+        # 'lr_boundaries': [160000, 320000, 480000, 560000],
 
         # min_length = 50:
-        # 'lr_boundaries': [67500, 135000, 202500, 236250],
+        'lr_boundaries': [67500, 135000, 202500, 236250],
     }
 
     hp.override_from_dict(hp_dict)

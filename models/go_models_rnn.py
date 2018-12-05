@@ -357,7 +357,7 @@ class MyConvRNNModel(GoModelRNN):
         init_state = cell.zero_state(hp.batch_size, tf.float32)
 
         rnn_outputs = static_rnn(cell, rnn_ins, init_state, hp.min_length, "my_conv_rnn")
-        rnn_outputs = tf.reshape(rnn_outputs, [-1, hp.num_filters, board_size, board_size])
+        rnn_outputs = tf.reshape(rnn_outputs, [-1, hp.num_dense_filters, board_size, board_size])
 
         return rnn_outputs
 
@@ -395,7 +395,7 @@ class MyConvLSTMModel(GoModelRNN):
 
         rnn_outputs = static_rnn(cell, rnn_ins, init_state, hp.min_length, "my_conv_lstm")
         rnn_outputs = tf.transpose(rnn_outputs, perm=[0, 1, 4, 2, 3])
-        rnn_outputs = tf.reshape(rnn_outputs, [-1, hp.num_filters, board_size, board_size])
+        rnn_outputs = tf.reshape(rnn_outputs, [-1, hp.num_dense_filters, board_size, board_size])
 
         return rnn_outputs
 
@@ -423,13 +423,13 @@ class MyConvGRUModel(GoModelRNN):
 
         cell = rnn_cells.ConvGRUCell(input_shape=[board_size, board_size],
                                      kernel_shape=[3, 3],
-                                     output_channels=hp.num_filters,
+                                     output_channels=hp.num_dense_filters,
                                      normalize=True,
                                      data_format='channels_first')
 
         init_state = cell.zero_state(hp.batch_size, tf.float32)
 
         rnn_outputs = static_rnn(cell, rnn_ins, init_state, hp.min_length, "my_conv_gru")
-        rnn_outputs = tf.reshape(rnn_outputs, [-1, hp.num_filters, board_size, board_size])
+        rnn_outputs = tf.reshape(rnn_outputs, [-1, hp.num_dense_filters, board_size, board_size])
 
         return rnn_outputs
