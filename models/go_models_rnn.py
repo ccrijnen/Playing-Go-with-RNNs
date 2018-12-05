@@ -86,7 +86,7 @@ class GoModelRNN(GoModel):
             p_acc = tf.reduce_mean(tf.cast(p_correct, tf.float32))
             return p_acc
 
-    def split_features(self, inputs, features):
+    def split_to_min_length(self, inputs, features):
         hp = self.hparams
         self.max_game_length = hp.min_length
 
@@ -347,7 +347,7 @@ class MyConvRNNModel(GoModelRNN):
 
         rnn_ins = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
 
-        rnn_ins, features = self.split_features(rnn_ins, features)
+        rnn_ins, features = self.split_to_min_length(rnn_ins, features)
 
         cell = rnn_cells.ConvRNNCell(input_shape=[hp.num_filters, board_size, board_size],
                                      output_channels=hp.num_dense_filters,
@@ -381,7 +381,7 @@ class MyConvLSTMModel(GoModelRNN):
 
         rnn_ins = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
 
-        rnn_ins, features = self.split_features(rnn_ins, features)
+        rnn_ins, features = self.split_to_min_length(rnn_ins, features)
 
         rnn_ins = tf.transpose(rnn_ins, perm=[0, 1, 3, 4, 2])
 
@@ -419,7 +419,7 @@ class MyConvGRUModel(GoModelRNN):
 
         rnn_ins = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
 
-        rnn_ins, features = self.split_features(rnn_ins, features)
+        rnn_ins, features = self.split_to_min_length(rnn_ins, features)
 
         cell = rnn_cells.ConvGRUCell(input_shape=[board_size, board_size],
                                      kernel_shape=[3, 3],
