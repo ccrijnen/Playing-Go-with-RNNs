@@ -425,6 +425,7 @@ class MyConvGRUModel(GoModelRNN):
                                      kernel_shape=[3, 3],
                                      output_channels=hp.num_dense_filters,
                                      normalize=True,
+                                     activation=tf.nn.relu,
                                      data_format='channels_first')
 
         init_state = cell.zero_state(hp.batch_size, tf.float32)

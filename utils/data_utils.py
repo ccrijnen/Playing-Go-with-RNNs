@@ -82,9 +82,10 @@ class DatasetStats:
 
         modes = ['rnn', 'rnn_sorted', 'cnn', 'cnn_split']
 
-        json_path = os.path.join(data_dir, 'dataset_params{}_{:03}{}.json'.format(self.suffix, min_length, max_str))
+        filename = 'dataset_params{}_{:03}{}.json'.format(self.suffix, min_length, max_str)
+        json_path = os.path.join(data_dir, filename)
         if os.path.isfile(json_path):
-            tf.logging.info("Skipped creating sizes. Found dataset_params{}.json in data_dir.".format(self.suffix))
+            tf.logging.info("Skipped creating sizes. Found {} in data_dir.".format(filename))
 
             self.sizes = {}
 
