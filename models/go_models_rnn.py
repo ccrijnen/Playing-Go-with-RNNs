@@ -424,6 +424,7 @@ class MyConvGRUModel(GoModelRNN):
         cell = rnn_cells.ConvGRUCell(input_shape=[board_size, board_size],
                                      kernel_shape=[3, 3],
                                      output_channels=hp.num_dense_filters,
+                                     use_bias=False,
                                      normalize=False,
                                      activation=tf.nn.relu,
                                      data_format='channels_first')
