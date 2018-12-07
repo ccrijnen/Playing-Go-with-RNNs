@@ -70,6 +70,7 @@ class ConvRNNCell(tf.nn.rnn_cell.RNNCell):
 class ConvGRUCell(tf.nn.rnn_cell.RNNCell):
     """A GRU cell with convolutions instead of multiplications."""
     def __init__(self, input_shape, output_channels, kernel_shape,
+                 use_bias=True,
                  activation=tf.tanh,
                  normalize=True,
                  data_format='channels_last',
@@ -80,6 +81,7 @@ class ConvGRUCell(tf.nn.rnn_cell.RNNCell):
             input_shape: (int, int, int) Shape of the input as int tuple, excluding the batch size
             output_channels: (int) number of output channels of the conv LSTM
             kernel_shape: (int, int) Shape of kernel as in tuple of size 2
+            use_bias: (bool) whether the convolutions use biases
             activation: Activation function.
             normalize: (bool) whether to layer normalize the conv output
             data_format: A string, one of 'channels_last' (default) or 'channels_first'. The ordering of the dimensions in
@@ -92,6 +94,7 @@ class ConvGRUCell(tf.nn.rnn_cell.RNNCell):
         super(ConvGRUCell, self).__init__(_reuse=reuse)
         self._filters = output_channels
         self._kernel = kernel_shape
+        self._use_bias = use_bias
         self._activation = activation
         self._normalize = normalize
 
@@ -129,8 +132,10 @@ class ConvGRUCell(tf.nn.rnn_cell.RNNCell):
                 r, u = tf.split(y, 2, axis=self._feature_axis)
                 r = tf.contrib.layers.layer_norm(r)
                 u = tf.contrib.layers.layer_norm(u)
-            else:
+            elif self._use_bias:
                 y += tf.get_variable('bias', [m], initializer=tf.ones_initializer())
+                r, u = tf.split(y, 2, axis=self._feature_axis)
+            else:
                 r, u = tf.split(y, 2, axis=self._feature_axis)
             r, u = tf.sigmoid(r), tf.sigmoid(u)
 
@@ -142,7 +147,7 @@ class ConvGRUCell(tf.nn.rnn_cell.RNNCell):
             y = tf.nn.convolution(inputs, W, 'SAME', data_format=self._data_format)
             if self._normalize:
                 y = tf.contrib.layers.layer_norm(y)
-            else:
+            elif self._use_bias:
                 y += tf.get_variable('bias', [m], initializer=tf.zeros_initializer())
             h = u * h + (1 - u) * self._activation(y)
 
