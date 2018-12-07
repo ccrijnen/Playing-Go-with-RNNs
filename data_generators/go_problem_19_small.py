@@ -78,12 +78,12 @@ class GoProblem19SmallRnn(GoProblem19Small):
 
         4. randomly augment the example
         """
-        # if hasattr(hparams, "split_to_min_length") and hparams.split_to_min_length:
-        #     example["game_length"] = tf.constant(hparams.min_length, tf.int64)
-        #     example["inputs"] = example["inputs"][:hparams.min_length]
-        #     example["to_play"] = example["to_play"][:hparams.min_length]
-        #     example["p_targets"] = example["p_targets"][:hparams.min_length]
-        #     example["legal_moves"] = example["legal_moves"][:hparams.min_length]
+        if hasattr(hparams, "split_to_min_length") and hparams.split_to_min_length:
+            example["game_length"] = tf.constant(hparams.min_length, tf.int64)
+            example["inputs"] = example["inputs"][:hparams.min_length]
+            example["to_play"] = example["to_play"][:hparams.min_length]
+            example["p_targets"] = example["p_targets"][:hparams.min_length]
+            example["legal_moves"] = example["legal_moves"][:hparams.min_length]
 
         example = go_preprocessing.format_example_rnn(example)
 
@@ -135,12 +135,12 @@ class GoProblem19SmallCnn(GoProblem19Small):
 
         4. randomly augment the examples individually
         """
-        # if hasattr(hparams, "split_to_min_length") and hparams.split_to_min_length:
-        #     example["game_length"] = tf.constant(hparams.min_length, tf.int64)
-        #     example["inputs"] = example["inputs"][:hparams.min_length]
-        #     example["to_play"] = example["to_play"][:hparams.min_length]
-        #     example["p_targets"] = example["p_targets"][:hparams.min_length]
-        #     example["legal_moves"] = example["legal_moves"][:hparams.min_length]
+        if hasattr(hparams, "split_to_min_length") and hparams.split_to_min_length:
+            example["game_length"] = tf.constant(hparams.min_length, tf.int64)
+            example["inputs"] = example["inputs"][:hparams.min_length]
+            example["to_play"] = example["to_play"][:hparams.min_length]
+            example["p_targets"] = example["p_targets"][:hparams.min_length]
+            example["legal_moves"] = example["legal_moves"][:hparams.min_length]
 
         example = go_preprocessing.format_example_cnn(example, hparams)
         example.pop("to_play")

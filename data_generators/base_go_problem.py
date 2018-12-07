@@ -465,8 +465,8 @@ class GoProblem(problem.Problem):
         # Construct the Problem's hp so that items within it are accessible
         hparams = self.get_hparams(hparams)
 
-        # def gpu_valid_size(example):
-        #     return data_utils.example_valid_size(example, hparams.min_length, hparams.max_length)
+        def gpu_valid_size(example):
+            return data_utils.example_valid_size(example, hparams.min_length, hparams.max_length)
 
         data_filepattern = self.filepattern(data_dir, dataset_split, shard=shard)
         if only_last:
@@ -490,9 +490,9 @@ class GoProblem(problem.Problem):
             # Decode.
             _dataset = _dataset.map(self.decode_example, num_parallel_calls=num_threads)
             # Filter min lengths if hparams are given
-            # if hparams and hasattr(hparams, "min_length") and \
-            #         hasattr(hparams, "max_length") and hparams.max_length:
-            #     _dataset = _dataset.filter(gpu_valid_size)
+            if hparams and hasattr(hparams, "min_length") and \
+                    hasattr(hparams, "max_length") and hparams.max_length:
+                _dataset = _dataset.filter(gpu_valid_size)
             # Preprocess if requested.
             # Note that preprocessing should happen per-file as order may matter.
             if preprocess:
@@ -550,8 +550,8 @@ class GoProblem(problem.Problem):
         is_training = mode == tf.estimator.ModeKeys.TRAIN
         num_threads = problem.cpu_count() if is_training else 1
 
-        def gpu_valid_size(example):
-            return data_utils.example_valid_size(example, hparams.min_length, hparams.max_length)
+        # def gpu_valid_size(example):
+        #     return data_utils.example_valid_size(example, hparams.min_length, hparams.max_length)
 
         # Read and preprocess
         data_dir = data_dir or (hasattr(hparams, "data_dir") and hparams.data_dir)
@@ -572,7 +572,7 @@ class GoProblem(problem.Problem):
         dataset = dataset.map(
             data_reader.cast_ints_to_int32, num_parallel_calls=num_threads)
 
-        dataset = dataset.filter(gpu_valid_size)
+        # dataset = dataset.filter(gpu_valid_size)
 
         dataset = dataset.apply(
             tf.contrib.data.bucket_by_sequence_length(
