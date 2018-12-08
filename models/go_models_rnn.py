@@ -284,13 +284,14 @@ class ConvGRUModel(GoModelRNN):
             with tf.variable_scope("residual_block_{}".format(i+1)):
                 out = self.residual_block(out)
 
-        with tf.variable_scope("conv_gru"):
-            rnn_in = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
+        rnn_in = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
 
+        with tf.variable_scope("conv_gru"):
             cell = rnn_cells.ConvGRUCell(input_shape=[board_size, board_size],
                                          kernel_shape=[3, 3],
                                          output_channels=hp.num_filters,
-                                         normalize=True,
+                                         use_bias=False,
+                                         normalize=False,
                                          data_format='channels_first')
 
             rnn_outputs, _ = tf.nn.dynamic_rnn(cell, rnn_in, sequence_length=game_length,
@@ -426,7 +427,6 @@ class MyConvGRUModel(GoModelRNN):
                                      output_channels=hp.num_filters,
                                      use_bias=False,
                                      normalize=False,
-                                     activation=tf.nn.relu,
                                      data_format='channels_first')
 
         init_state = cell.zero_state(hp.batch_size, tf.float32)
