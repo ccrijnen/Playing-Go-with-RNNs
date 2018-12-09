@@ -464,6 +464,7 @@ class BNConvGRUModel(GoModelRNN):
         cell = rnn_cells.BNConvGRUCell(input_shape=[board_size, board_size],
                                        kernel_shape=[3, 3],
                                        output_channels=hp.num_dense_filters,
+                                       use_bias=True,
                                        max_bn_steps=hp.min_length,
                                        training=is_training,
                                        activation=tf.nn.relu)
