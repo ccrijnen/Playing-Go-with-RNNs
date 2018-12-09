@@ -337,7 +337,7 @@ class BNConvGRUCell(tf.nn.rnn_cell.RNNCell):
 
         with tf.variable_scope('gates'):
             channels = x.shape[-1].value
-            m = 2 * self._filters if self._filters > 1 else 2
+            m = 2 * self._filters
 
             kernel_x = tf.get_variable('kernel_x', self._kernel + [channels, m])
             kernel_h = tf.get_variable('kernel_h', self._kernel + [self._filters, m])
@@ -348,23 +348,17 @@ class BNConvGRUCell(tf.nn.rnn_cell.RNNCell):
             rux = self._batch_norm(rux, 'rux', step)
             ruh = self._batch_norm(ruh, 'ruh', step)
 
-            rx, ux = tf.split(rux, 2, axis=-1)
-            rh, uh = tf.split(ruh, 2, axis=-1)
-
             if self._use_bias:
-                bias_r = tf.get_variable('bias_r', [self._filters], initializer=tf.ones_initializer())
-                bias_u = tf.get_variable('bias_u', [self._filters], initializer=tf.ones_initializer())
-
-                rc = tf.nn.bias_add(rx + rh, bias_r)
-                uc = tf.nn.bias_add(ux + uh, bias_u)
+                bias = tf.get_variable('bias_r', [m], initializer=tf.ones_initializer())
+                ru = tf.nn.bias_add(rux + ruh, bias)
             else:
-                rc = rx + rh
-                uc = ux + uh
+                ru = rux + ruh
 
-            r = tf.sigmoid(rc)
-            u = tf.sigmoid(uc)
+            ru = tf.sigmoid(ru)
+            r, u = tf.split(ru, 2, axis=-1)
 
         with tf.variable_scope('candidate'):
+            channels = x.shape[-1].value
             m = self._filters
 
             kernel_x = tf.get_variable('kernel_x', self._kernel + [channels, m])
