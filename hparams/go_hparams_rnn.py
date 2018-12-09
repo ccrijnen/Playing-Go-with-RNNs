@@ -67,6 +67,19 @@ def go_hparams_19_rnn_split():
     return hp
 
 
+def go_hparams_19_rnn_norm_split():
+    hp = go_hparams_19_rnn_split()
+
+    hp_dict = {
+        'lr_boundaries': [35000, 70000, 105000, 122500],
+        'lr_rates': [1e-1, 1e-3, 1e-5, 1e-6, 1e-7]
+    }
+
+    hp.override_from_dict(hp_dict)
+
+    return hp
+
+
 def go_hparams_19_rnn_sorted():
     hp = go_hparams_19_rnn()
 
