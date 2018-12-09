@@ -471,7 +471,7 @@ class BNConvGRUModel(GoModelRNN):
         init_state = cell.zero_state(hp.batch_size, tf.float32)
         init_state = (init_state, 0)
 
-        rnn_outputs = static_rnn(cell, rnn_ins, init_state, hp.min_length, "my_conv_gru")
+        rnn_outputs = static_rnn(cell, rnn_ins, init_state, hp.min_length, "bn_conv_gru")
         rnn_outputs = tf.transpose(rnn_outputs, perm=[0, 1, 4, 2, 3])
         rnn_outputs = tf.reshape(rnn_outputs, [-1, hp.num_dense_filters, board_size, board_size])
 
