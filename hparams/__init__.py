@@ -1,11 +1,13 @@
 from hparams.go_hparams_cnn import go_hparams_19_cnn, go_hparams_19_cnn_split
-from hparams.go_hparams_rnn import go_hparams_19_rnn, go_hparams_19_rnn_split, go_hparams_19_rnn_sorted
+from hparams.go_hparams_rnn import go_hparams_19_rnn, go_hparams_19_rnn_split, go_hparams_19_rnn_norm_split, \
+    go_hparams_19_rnn_sorted
 
 __all__ = [
     "go_hparams_19_cnn",
     "go_hparams_19_cnn_split",
     "go_hparams_19_rnn",
     "go_hparams_19_rnn_split",
+    "go_hparams_19_rnn_norm_split",
     "go_hparams_19_rnn_sorted",
 ]
 
