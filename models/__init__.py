@@ -1,6 +1,6 @@
 from models.go_models_cnn import AlphaZeroModel, AlphaZeroModelDense
 from models.go_models_rnn import VanillaRNNModel, LSTMModel, GRUModel, \
-    ConvRNNModel, MyConvRNNModel, ConvLSTMModel, MyConvLSTMModel, ConvGRUModel, MyConvGRUModel
+    ConvRNNModel, MyConvRNNModel, ConvLSTMModel, MyConvLSTMModel, ConvGRUModel, MyConvGRUModel, BNConvGRUModel
 
 __all__ = [
     # CNN
@@ -16,7 +16,8 @@ __all__ = [
     "ConvLSTMModel",
     "MyConvLSTMModel",
     "ConvGRUModel",
-    "MyConvGRUModel"
+    "MyConvGRUModel",
+    "BNConvGRUModel"
 ]
 
 

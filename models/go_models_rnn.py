@@ -435,3 +435,44 @@ class MyConvGRUModel(GoModelRNN):
         rnn_outputs = tf.reshape(rnn_outputs, [-1, hp.num_dense_filters, board_size, board_size])
 
         return rnn_outputs
+
+
+class BNConvGRUModel(GoModelRNN):
+    """Model as in AlphaGo Zero paper but adding a Conv GRU RNN layer statically unrolled using only the first
+    min_length positions."""
+    def body(self, features):
+        hp = self.hparams
+        board_size = hp.board_size
+        is_training = hp.mode == tf.estimator.ModeKeys.TRAIN
+
+        inputs = features["inputs"]
+        inputs = tf.reshape(inputs, [-1, 3, board_size, board_size])
+
+        with tf.variable_scope("conv_block"):
+            out = self.conv_block_in(inputs)
+
+        for i in range(hp.num_res_blocks):
+            with tf.variable_scope("residual_block_{}".format(i+1)):
+                out = self.residual_block(out)
+
+        rnn_ins = tf.reshape(out, [-1, self.max_game_length, hp.num_filters, board_size, board_size])
+
+        rnn_ins, features = self.split_to_min_length(rnn_ins, features)
+
+        rnn_ins = tf.transpose(rnn_ins, perm=[0, 1, 3, 4, 2])
+
+        cell = rnn_cells.BNConvGRUCell(input_shape=[board_size, board_size],
+                                       kernel_shape=[3, 3],
+                                       output_channels=hp.num_dense_filters,
+                                       max_bn_steps=hp.min_length,
+                                       training=is_training,
+                                       activation=tf.nn.relu)
+
+        init_state = cell.zero_state(hp.batch_size, tf.float32)
+        init_state = (init_state, 0)
+
+        rnn_outputs = static_rnn(cell, rnn_ins, init_state, hp.min_length, "my_conv_gru")
+        rnn_outputs = tf.transpose(rnn_outputs, perm=[0, 1, 4, 2, 3])
+        rnn_outputs = tf.reshape(rnn_outputs, [-1, hp.num_dense_filters, board_size, board_size])
+
+        return rnn_outputs

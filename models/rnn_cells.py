@@ -2,6 +2,7 @@ from tensorflow.python.ops import nn_ops
 from tensorflow.python.keras import activations
 
 import tensorflow as tf
+import numpy as np
 
 
 class ConvRNNCell(tf.nn.rnn_cell.RNNCell):
@@ -258,3 +259,121 @@ class MyConv2DLSTMCell(tf.nn.rnn_cell.RNNCell):
 
         new_state = tf.nn.rnn_cell.LSTMStateTuple(new_cell, output)
         return output, new_state
+
+
+class BNConvGRUCell(tf.nn.rnn_cell.RNNCell):
+    """A GRU cell with convolutions instead of multiplications."""
+    def __init__(self, input_shape, output_channels, kernel_shape, max_bn_steps, training,
+                 activation=tf.tanh,
+                 momentum=0.95,
+                 initial_scale=0.1,
+                 reuse=None):
+        """Construct ConvGRUCell.
+
+        Args:
+            input_shape: (int, int, int) Shape of the input as int tuple, excluding the batch size
+            output_channels: (int) number of output channels of the conv LSTM
+            kernel_shape: (int, int) Shape of kernel as in tuple of size 2
+            activation: Activation function.
+            reuse: (bool) whether to reuse the weights of a previous layer by the same name.
+        Raises:
+            ValueError: If data_format is not 'channels_first' or 'channels_last'
+        """
+        super(BNConvGRUCell, self).__init__(_reuse=reuse)
+        self._filters = output_channels
+        self._kernel = kernel_shape
+        self._max_bn_steps = max_bn_steps
+        self._training = tf.constant(training, tf.bool)
+        self._activation = activation
+        self._momentum = momentum
+        self._initial_scale = initial_scale
+
+        self._size = tf.TensorShape(input_shape + [self._filters])
+        self._feature_axis = self._size.ndims
+
+
+    @property
+    def state_size(self):
+        return self._size
+
+    @property
+    def output_size(self):
+        return self._size
+
+    def _batch_norm(self, x, name_scope, step, epsilon=1e-5):
+        with tf.variable_scope(name_scope):
+            size = x.get_shape().as_list()[-1]
+
+            scale = tf.get_variable('scale', [size], initializer=tf.constant_initializer(self._initial_scale))
+            offset = 0
+
+            pop_mean_all_steps = tf.get_variable('pop_mean', [self._max_bn_steps, size],
+                                                 initializer=tf.zeros_initializer, trainable=False)
+            pop_var_all_steps = tf.get_variable('pop_var', [self._max_bn_steps, size],
+                                                initializer=tf.ones_initializer(), trainable=False)
+
+            step = tf.minimum(step, self._max_bn_steps - 1)
+
+            pop_mean = pop_mean_all_steps[step]
+            pop_var = pop_var_all_steps[step]
+
+            batch_mean, batch_var = tf.nn.moments(x, [0, 1, 2])
+
+            def batch_statistics():
+                pop_mean_new = pop_mean * self._momentum + batch_mean * (1 - self._momentum)
+                pop_var_new = pop_var * self._momentum + batch_var * (1 - self._momentum)
+                with tf.control_dependencies([pop_mean.assign(pop_mean_new), pop_var.assign(pop_var_new)]):
+                    return tf.nn.batch_normalization(x, batch_mean, batch_var, offset, scale, epsilon)
+
+            def population_statistics():
+                return tf.nn.batch_normalization(x, pop_mean, pop_var, offset, scale, epsilon)
+
+            return tf.cond(self._training, batch_statistics, population_statistics)
+
+    def call(self, x, state, scope=None):
+        h, step = state
+        _step = step # tf.squeeze(tf.gather(tf.cast(step, tf.int32), 0))
+
+        with tf.variable_scope('gates'):
+            channels = x.shape[-1].value
+            m = 2 * self._filters if self._filters > 1 else 2
+
+            kernel_x = tf.get_variable('kernel_x', self._kernel + [channels, m])
+            kernel_h = tf.get_variable('kernel_h', self._kernel + [self._filters, m])
+
+            rux = tf.nn.convolution(x, kernel_x, 'SAME')
+            ruh = tf.nn.convolution(h, kernel_h, 'SAME')
+
+            rux = self._batch_norm(rux, 'rux', _step)
+            ruh = self._batch_norm(ruh, 'ruh', _step)
+
+            rx, ux = tf.split(rux, 2, axis=-1)
+            rh, uh = tf.split(ruh, 2, axis=-1)
+
+            bias_r = tf.get_variable('bias_r', [self._filters], initializer=tf.constant_initializer(1.0))
+            bias_u = tf.get_variable('bias_u', [self._filters], initializer=tf.constant_initializer(1.0))
+
+            rc = tf.nn.bias_add(rx + rh, bias_r)
+            uc = tf.nn.bias_add(ux + uh, bias_u)
+
+            r = tf.sigmoid(rc)
+            u = tf.sigmoid(uc)
+
+        with tf.variable_scope('candidate'):
+            m = self._filters
+
+            kernel_x = tf.get_variable('kernel_x', self._kernel + [channels, m])
+            kernel_h = tf.get_variable('kernel_h', self._kernel + [self._filters, m])
+
+            hx = tf.nn.convolution(x, kernel_x, 'SAME')
+            hh = tf.nn.convolution(r * h, kernel_h, 'SAME')
+
+            hx = self._batch_norm(hx, 'hx', _step)
+            hh = self._batch_norm(hh, 'hh', _step)
+
+            bias_h = tf.get_variable('bias', [self._filters], initializer=tf.zeros_initializer())
+            hc = tf.nn.bias_add(hx + hh, bias_h)
+
+            h = u * h + (1 - u) * self._activation(hc)
+
+        return h, (h, step+1)
