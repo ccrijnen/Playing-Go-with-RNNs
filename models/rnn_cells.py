@@ -264,6 +264,7 @@ class MyConv2DLSTMCell(tf.nn.rnn_cell.RNNCell):
 class BNConvGRUCell(tf.nn.rnn_cell.RNNCell):
     """A GRU cell with convolutions instead of multiplications."""
     def __init__(self, input_shape, output_channels, kernel_shape, max_bn_steps, training,
+                 use_bias=False,
                  activation=tf.tanh,
                  momentum=0.95,
                  initial_scale=0.1,
@@ -284,6 +285,7 @@ class BNConvGRUCell(tf.nn.rnn_cell.RNNCell):
         self._kernel = kernel_shape
         self._max_bn_steps = max_bn_steps
         self._training = tf.constant(training, tf.bool)
+        self._use_bias = use_bias
         self._activation = activation
         self._momentum = momentum
         self._initial_scale = initial_scale
@@ -308,7 +310,7 @@ class BNConvGRUCell(tf.nn.rnn_cell.RNNCell):
             offset = 0
 
             pop_mean_all_steps = tf.get_variable('pop_mean', [self._max_bn_steps, size],
-                                                 initializer=tf.zeros_initializer, trainable=False)
+                                                 initializer=tf.zeros_initializer(), trainable=False)
             pop_var_all_steps = tf.get_variable('pop_var', [self._max_bn_steps, size],
                                                 initializer=tf.ones_initializer(), trainable=False)
 
@@ -332,7 +334,6 @@ class BNConvGRUCell(tf.nn.rnn_cell.RNNCell):
 
     def call(self, x, state, scope=None):
         h, step = state
-        _step = step # tf.squeeze(tf.gather(tf.cast(step, tf.int32), 0))
 
         with tf.variable_scope('gates'):
             channels = x.shape[-1].value
@@ -344,17 +345,21 @@ class BNConvGRUCell(tf.nn.rnn_cell.RNNCell):
             rux = tf.nn.convolution(x, kernel_x, 'SAME')
             ruh = tf.nn.convolution(h, kernel_h, 'SAME')
 
-            rux = self._batch_norm(rux, 'rux', _step)
-            ruh = self._batch_norm(ruh, 'ruh', _step)
+            rux = self._batch_norm(rux, 'rux', step)
+            ruh = self._batch_norm(ruh, 'ruh', step)
 
             rx, ux = tf.split(rux, 2, axis=-1)
             rh, uh = tf.split(ruh, 2, axis=-1)
 
-            bias_r = tf.get_variable('bias_r', [self._filters], initializer=tf.constant_initializer(1.0))
-            bias_u = tf.get_variable('bias_u', [self._filters], initializer=tf.constant_initializer(1.0))
+            if self._use_bias:
+                bias_r = tf.get_variable('bias_r', [self._filters], initializer=tf.ones_initializer())
+                bias_u = tf.get_variable('bias_u', [self._filters], initializer=tf.ones_initializer())
 
-            rc = tf.nn.bias_add(rx + rh, bias_r)
-            uc = tf.nn.bias_add(ux + uh, bias_u)
+                rc = tf.nn.bias_add(rx + rh, bias_r)
+                uc = tf.nn.bias_add(ux + uh, bias_u)
+            else:
+                rc = rx + rh
+                uc = ux + uh
 
             r = tf.sigmoid(rc)
             u = tf.sigmoid(uc)
@@ -368,11 +373,14 @@ class BNConvGRUCell(tf.nn.rnn_cell.RNNCell):
             hx = tf.nn.convolution(x, kernel_x, 'SAME')
             hh = tf.nn.convolution(r * h, kernel_h, 'SAME')
 
-            hx = self._batch_norm(hx, 'hx', _step)
-            hh = self._batch_norm(hh, 'hh', _step)
+            hx = self._batch_norm(hx, 'hx', step)
+            hh = self._batch_norm(hh, 'hh', step)
 
-            bias_h = tf.get_variable('bias', [self._filters], initializer=tf.zeros_initializer())
-            hc = tf.nn.bias_add(hx + hh, bias_h)
+            if self._use_bias:
+                bias_h = tf.get_variable('bias', [self._filters], initializer=tf.zeros_initializer())
+                hc = tf.nn.bias_add(hx + hh, bias_h)
+            else:
+                hc = hx + hh
 
             h = u * h + (1 - u) * self._activation(hc)
 
